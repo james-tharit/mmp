@@ -31,11 +31,57 @@ type TrackInfo struct {
 }
 
 // Bubble Tea Model representing application state
-type model struct {
+type BubbleTeaModel struct {
 	player    *vlc.Player
 	meta      TrackInfo
 	isPlaying bool
 	filePath  string
+}
+
+func getVLCMetadata(media *vlc.Media) TrackInfo {
+	// Let VLC parse the local media file strings
+	err := media.ParseWithOptions(0, vlc.MediaParseLocal)
+	if err != nil {
+		fmt.Println("VLC Parsing internal failure:", err)
+	}
+
+	// 2. Small retry loop: Wait up to 500ms for background parsing to settle down
+	for i := 0; i < 10; i++ {
+		state, _ := media.ParseStatus()
+		if state == vlc.MediaParseDone {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// 3. CORRECT FIELDS: Ensure MetaTitle is used here!
+	title, _ := media.Meta(vlc.MediaTitle)
+	artist, _ := media.Meta(vlc.MediaArtist)
+	album, _ := media.Meta(vlc.MediaAlbum)
+
+	// --- DEBUG BLOCK START ---
+	// fmt.Println("--- Tag Debugging ---")
+	// fmt.Printf("Extracted Title:             %q\n", title)
+	// fmt.Printf("Extracted Artist:            %q\n", artist)
+	// fmt.Printf("Extracted Album:             %q\n", album)
+	// fmt.Println("---------------------")
+	// Fallback to defaults if metadata fields are empty strings
+	if title == "" {
+		title = "Unknown Title"
+	}
+	if artist == "" {
+		artist = "Unknown Artist"
+	}
+	if album == "" {
+		album = "Unknown Album"
+	}
+
+	return TrackInfo{
+		Title:  title,
+		Artist: artist,
+		Album:  album,
+		Format: "M4A/FLAC Engine Track",
+	}
 }
 
 // Extract tags from M4A or FLAC files safely
@@ -68,22 +114,22 @@ func getTrackMetadata(path string) TrackInfo {
 }
 
 // Initialize the TUI model
-func initialModel(path string, p *vlc.Player) model {
-	return model{
+func initialModel(path string, p *vlc.Player, meta TrackInfo) BubbleTeaModel {
+	return BubbleTeaModel{
 		player:    p,
-		meta:      getTrackMetadata(path),
+		meta:      meta,
 		isPlaying: true,
 		filePath:  path,
 	}
 }
 
 // Init command for Bubble Tea
-func (m model) Init() tea.Cmd {
+func (m BubbleTeaModel) Init() tea.Cmd {
 	return nil
 }
 
 // Update handles user input and actions (Model-View-Update architecture)
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m BubbleTeaModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -105,7 +151,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the terminal screen layout
-func (m model) View() string {
+func (m BubbleTeaModel) View() string {
 	status := "⏸ PAUSED"
 	if m.isPlaying {
 		status = "▶ PLAYING"
@@ -153,16 +199,17 @@ func main() {
 	defer player.Release()
 
 	// 3. Prepare the audio track
-	_, err = player.LoadMediaFromPath(trackPath)
+	media, err := player.LoadMediaFromPath(trackPath)
 	if err != nil {
 		log.Fatal("Load Error:", err)
 	}
-
+	meta := getVLCMetadata(media)
 	// Start playback immediately before launching the TUI view loop
 	player.Play()
 
 	// 4. Fire up the Bubble Tea TUI Engine
-	p := tea.NewProgram(initialModel(trackPath, player))
+
+	p := tea.NewProgram(initialModel(trackPath, player, meta))
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running TUI application: %v", err)
 		os.Exit(1)
