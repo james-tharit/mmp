@@ -45,8 +45,8 @@ Add these exports to your shell configuration profile (~/.zshrc or ~/.bash_profi
 
 ```Bash
 # Point CGO to Homebrew's ARM64 library location
-export CGO_CFLAGS="-I/opt/homebrew/include"
-export CGO_LDFLAGS="-L/opt/homebrew/lib"
+export CGO_CFLAGS="-I/Applications/VLC.app/Contents/MacOS/include"
+export CGO_LDFLAGS="-L/Applications/VLC.app/Contents/MacOS/lib -Wl,-rpath,/Applications/VLC.app/Contents/MacOS/lib"
 
 # Tell libvlc where to find its runtime decoding engines
 export VLC_PLUGIN_PATH="/Applications/VLC.app/Contents/MacOS/plugins"

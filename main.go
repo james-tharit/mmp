@@ -180,7 +180,7 @@ func (m BubbleTeaModel) View() string {
 
 func main() {
 	// 1. Point to your music file (M4A or FLAC)
-	trackPath := "./0000620687.320.m4a"
+	trackPath := "./わたがし.m4a"
 
 	if _, err := os.Stat(trackPath); os.IsNotExist(err) {
 		log.Fatalf("Error: Test file '%s' not found. Put an m4a/flac file here and name it sample.m4a", trackPath)
