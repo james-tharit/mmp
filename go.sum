@@ -27,6 +27,8 @@ github.com/gdamore/encoding v1.0.1 h1:YzKZckdBL6jVt2Gc+5p82qhrGiqMdG/eNs6Wy0u3Uh
 github.com/gdamore/encoding v1.0.1/go.mod h1:0Z0cMFinngz9kS1QfMjCP8TY7em3bZYeeklsSDPivEo=
 github.com/gdamore/tcell/v2 v2.13.10 h1:Afs3JKt83HnhuUKdZ3MnxUgOqQRWftj5JyDqv1LLynA=
 github.com/gdamore/tcell/v2 v2.13.10/go.mod h1:+Wfe208WDdB7INEtCsNrAN6O2m+wsTPk1RAovjaILlo=
+github.com/go-flac/go-flac/v2 v2.0.4 h1:atf/kFa8U9idtkA//NO22XGr+MzQLeXZecnmP9sYBf0=
+github.com/go-flac/go-flac/v2 v2.0.4/go.mod h1:sYOlTKxutMW0RDYF+KlD6Zn+VOCZlIFQG/r/usPveCs=
 github.com/gopxl/beep/v2 v2.1.1 h1:6FYIYMm2qPAdWkjX+7xwKrViS1x0Po5kDMdRkq8NVbU=
 github.com/gopxl/beep/v2 v2.1.1/go.mod h1:ZAm9TGQ9lvpoiFLd4zf5B1IuyxZhgRACMId1XJbaW0E=
 github.com/icza/bitio v1.1.0 h1:ysX4vtldjdi3Ygai5m1cWy4oLkhWTAi+SyO6HC8L9T0=

@@ -20,6 +20,7 @@ require (
 	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
+	github.com/go-flac/go-flac/v2 v2.0.4 // indirect
 	github.com/icza/bitio v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
