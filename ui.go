@@ -2,68 +2,128 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gopxl/beep/v2/speaker"
 )
-
-// TrackInfo holds metadata about an audio track
-type TrackInfo struct {
-	Title    string
-	Artist   string
-	Album    string
-	Format   string
-	Duration time.Duration
-}
 
 // UIModel represents the BubbleTea application state
 type UIModel struct {
-	player    *VLCPlayer
-	meta      TrackInfo
-	isPlaying bool
-	filePath  string
+	audio    *audioPanel
+	filePath string
 }
 
-// Define UI styles using Lipgloss
+// Define Modern UI Theme Styles
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00FF66")).MarginLeft(2)
-	helpStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).MarginTop(1).MarginLeft(2)
-	boxStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1).BorderForeground(lipgloss.Color("#00AAFF")).Width(50)
+	purple = lipgloss.Color("#9867C5")
+	yellow = lipgloss.Color("#F1C40F")
+	green  = lipgloss.Color("#2ECC71")
+	gray   = lipgloss.Color("#444444")
+	white  = lipgloss.Color("#EEEEEE")
+
+	appStyle = lipgloss.NewStyle().
+			Padding(1, 2).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(purple)
+
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(white).
+			Background(purple).
+			Padding(0, 1).
+			MarginBottom(1)
+
+	playingStatusStyle = lipgloss.NewStyle().Bold(true).Foreground(green)
+	pausedStatusStyle  = lipgloss.NewStyle().Bold(true).Foreground(gray)
+
+	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Width(12)
+	valueStyle = lipgloss.NewStyle().Foreground(yellow).Bold(true)
+
+	barEmptyStyle = lipgloss.NewStyle().Foreground(gray)
+	barFullStyle  = lipgloss.NewStyle().Foreground(purple)
+
+	helpStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#555555")).
+			MarginTop(1)
 )
 
 // NewUIModel creates and returns a new UI model
-func NewUIModel(filePath string, player *VLCPlayer, meta TrackInfo) UIModel {
+func NewUIModel(filePath string, audio *audioPanel) UIModel {
 	return UIModel{
-		player:    player,
-		meta:      meta,
-		isPlaying: true,
-		filePath:  filePath,
+		audio:    audio,
+		filePath: filePath,
 	}
 }
 
-// Init implements the tea.Model interface (initialization)
-func (m UIModel) Init() tea.Cmd {
-	return nil
+type tickMsg time.Time
+
+func (m UIModel) tick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
-// Update handles user input and actions
+func (m UIModel) Init() tea.Cmd {
+	return m.tick()
+}
+
 func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		return m, m.tick()
+
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
-			m.player.Stop()
+		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 
-		case " ": // Spacebar toggles pause/play
-			if m.isPlaying {
-				m.player.Pause()
-				m.isPlaying = false
-			} else {
-				m.player.Resume()
-				m.isPlaying = true
-			}
+		case " ":
+			speaker.Lock()
+			m.audio.ctrl.Paused = !m.audio.ctrl.Paused
+			speaker.Unlock()
+
+		case "w", "right":
+			speaker.Lock()
+			newPos := m.audio.streamer.Position() + m.audio.sampleRate.N(time.Second*5) // 5s skip feels smoother
+			newPos = min(newPos, m.audio.streamer.Len()-1)
+			_ = m.audio.streamer.Seek(newPos)
+			speaker.Unlock()
+
+		case "left":
+			speaker.Lock()
+			newPos := m.audio.streamer.Position() - m.audio.sampleRate.N(time.Second*5)
+			newPos = max(newPos, 0)
+			_ = m.audio.streamer.Seek(newPos)
+			speaker.Unlock()
+
+		case "s":
+			speaker.Lock()
+			// Cap the volume at 0.0 (original maximum recorded volume)
+			// to completely prevent digital clipping.
+			m.audio.volume.Volume = min(m.audio.volume.Volume+0.1, 0.0)
+			speaker.Unlock()
+
+		case "a":
+			speaker.Lock()
+			// -5.0 in beep is incredibly quiet (almost silent).
+			m.audio.volume.Volume = max(m.audio.volume.Volume-0.1, -5.0)
+			speaker.Unlock()
+
+		case "x":
+			speaker.Lock()
+			newRatio := m.audio.resampler.Ratio() * 16 / 15
+			m.audio.resampler.SetRatio(min(newRatio, 3.0))
+			speaker.Unlock()
+
+		case "z":
+			speaker.Lock()
+			newRatio := m.audio.resampler.Ratio() * 15 / 16
+			m.audio.resampler.SetRatio(max(newRatio, 0.25))
+			speaker.Unlock()
 		}
 	}
 	return m, nil
@@ -71,28 +131,67 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the terminal UI
 func (m UIModel) View() string {
-	status := "⏸ PAUSED"
-	if m.isPlaying {
-		status = "▶ PLAYING"
+	speaker.Lock()
+	positionIdx := m.audio.streamer.Position()
+	lengthIdx := m.audio.streamer.Len()
+	position := m.audio.sampleRate.D(positionIdx)
+	length := m.audio.sampleRate.D(lengthIdx)
+	volume := m.audio.volume.Volume
+	speed := m.audio.resampler.Ratio()
+	isPaused := m.audio.ctrl.Paused
+	speaker.Unlock()
+
+	// 1. Header and Status Badge
+	var statusBadge string
+	if isPaused {
+		statusBadge = pausedStatusStyle.Render("⏸ PAUSED")
+	} else {
+		statusBadge = playingStatusStyle.Render("▶ PLAYING")
+	}
+	headerRow := lipgloss.JoinHorizontal(lipgloss.Center, titleStyle.Render(" SPEEDY PLAYER "), "   ", statusBadge)
+
+	// 2. Visual Progress Bar calculation (Width: 30 blocks)
+	barWidth := 30
+	var percent float64
+	if lengthIdx > 0 {
+		percent = float64(positionIdx) / float64(lengthIdx)
+	}
+	filledWidth := int(math.Round(percent * float64(barWidth)))
+	if filledWidth > barWidth {
+		filledWidth = barWidth
 	}
 
-	// Build the visual interface
-	uiText := fmt.Sprintf(
-		"%s\n\n"+
-			"%s %s\n"+
-			"%s %s\n"+
-			"%s %s\n"+
-			"%s %s\n\n"+
-			"%s",
-		titleStyle.Render("GO-MMP: TERMINAL AUDIO PLAYER"),
-		lipgloss.NewStyle().Bold(true).Render("  Track: "), m.meta.Title,
-		lipgloss.NewStyle().Bold(true).Render("  Artist:"), m.meta.Artist,
-		lipgloss.NewStyle().Bold(true).Render("  Album: "), m.meta.Album,
-		lipgloss.NewStyle().Bold(true).Render("  Codec: "), fmt.Sprintf("%s (libvlc backend)", m.meta.Format),
-		lipgloss.NewStyle().Background(lipgloss.Color("#333333")).PaddingLeft(1).PaddingRight(1).Render(status),
+	progressBar := barFullStyle.Render(strings.Repeat("█", filledWidth)) +
+		barEmptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
+
+	timeFormat := fmt.Sprintf(" %s / %s", position.Round(time.Second), length.Round(time.Second))
+	progressRow := fmt.Sprintf("%s%s\n", progressBar, helpStyle.Render(timeFormat))
+
+	// 3. Audio Info Metrics Panel
+	volumePercent := int((volume + 5.0) / 7.0 * 100) // Rough map to an easily read 0-100% metric
+	if volumePercent < 0 {
+		volumePercent = 0
+	}
+
+	metricsPanel := fmt.Sprintf(
+		"%s%s\n%s%s",
+		labelStyle.Render("Volume (A/S):"), valueStyle.Render(fmt.Sprintf("%d%%", volumePercent)),
+		labelStyle.Render("Speed  (Z/X):"), valueStyle.Render(fmt.Sprintf("%.2fx", speed)),
 	)
 
-	help := helpStyle.Render("Controls: [Space] Play/Pause  |  [q] Quit Player")
+	// 4. Compact Footer Controls Guide
+	footer := helpStyle.Render("⚡ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [Esc/Q] Quit")
 
-	return boxStyle.Render(uiText + help)
+	// Assembly
+	body := lipgloss.JoinVertical(
+		lipgloss.Left,
+		headerRow,
+		"",
+		progressRow,
+		metricsPanel,
+		"",
+		footer,
+	)
+
+	return appStyle.Render(body) + "\n"
 }
