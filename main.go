@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -186,12 +188,52 @@ func getMetadata(filePath string) (*FLACMetadata, error) {
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s song.flac\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s <path_to_file_or_directory>\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	// Open and decode the audio file
-	f, err := os.Open(os.Args[1])
+	targetPath := os.Args[1]
+
+	// 1. Check if the path is a file or a directory
+	fileInfo, err := os.Stat(targetPath)
+	if err != nil {
+		report(fmt.Errorf("error accessing path: %w", err))
+	}
+
+	var flacFiles []string
+
+	if fileInfo.IsDir() {
+		// Scenario A: It's a directory, scan for FLAC files
+		files, err := os.ReadDir(targetPath)
+		if err != nil {
+			report(fmt.Errorf("failed to read directory: %w", err))
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && isFlac(file.Name()) {
+				flacFiles = append(flacFiles, filepath.Join(targetPath, file.Name()))
+			}
+		}
+	} else {
+		// Scenario B: It's a single file, verify it's a FLAC
+		if isFlac(targetPath) {
+			flacFiles = append(flacFiles, targetPath)
+		} else {
+			fmt.Fprintln(os.Stderr, "Error: The provided file is not a FLAC file.")
+			os.Exit(1)
+		}
+	}
+
+	// 2. Ensure we have at least one file to play
+	if len(flacFiles) == 0 {
+		fmt.Fprintln(os.Stderr, "No FLAC files found to play.")
+		os.Exit(1)
+	}
+
+	// 3. Setup and play the first track (for backwards compatibility with your UI)
+	firstTrack := flacFiles[0]
+
+	f, err := os.Open(firstTrack)
 	if err != nil {
 		report(err)
 	}
@@ -207,7 +249,6 @@ func main() {
 	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/30))
 	defer speaker.Close()
 
-	// Create audio panel with the beep engine
 	ap, err := newAudioPanel(format.SampleRate, streamer)
 	if err != nil {
 		report(err)
@@ -215,21 +256,23 @@ func main() {
 
 	ap.play()
 
-	// Get metadata
-	metadata, err := getMetadata(os.Args[1])
+	metadata, err := getMetadata(firstTrack)
 	if err != nil {
 		report(err)
 	}
-	// fmt.Printf("Title: %s\nArtist: %s\nAlbum: %s\nDate: %s\nDuration: %d seconds\nSample Rate: %d Hz\nChannels: %d\nBit Depth: %d\n",
-	// 	metadata.Title, metadata.Artist, metadata.Album, metadata.Date, metadata.Duration, metadata.SampleRate, metadata.Channels, metadata.BitDepth)
 
-	// Create and run BubbleTea app
-	model := NewUIModel(os.Args[1], ap, metadata)
+	// 4. Pass data to BubbleTea
+	model := NewUIModel(firstTrack, ap, metadata)
 	p := tea.NewProgram(model)
 
 	if _, err := p.Run(); err != nil {
 		report(err)
 	}
+}
+
+// Helper function to check for .flac extension
+func isFlac(filename string) bool {
+	return strings.HasSuffix(strings.ToLower(filename), ".flac")
 }
 
 func report(err error) {
