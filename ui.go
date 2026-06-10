@@ -1,21 +1,27 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
 	"math"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/gopxl/beep/v2/speaker"
+	"github.com/nfnt/resize"
 )
 
 // UIModel represents the BubbleTea application state
 type UIModel struct {
-	audio    *audioPanel
-	filePath string
-	metadata *FLACMetadata
+	audio         *audioPanel
+	filePath      string
+	metadata      *FLACMetadata
+	terminalWidth int
 }
 
 // Define Modern UI Theme Styles
@@ -78,6 +84,9 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, m.tick()
 
+	case tea.WindowSizeMsg:
+		m.terminalWidth = msg.Width
+		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
@@ -131,7 +140,7 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the terminal UI
+// View renders the terminal UI with side-by-side metadata and album art layout
 func (m UIModel) View() string {
 	speaker.Lock()
 	positionIdx := m.audio.streamer.Position()
@@ -143,7 +152,7 @@ func (m UIModel) View() string {
 	isPaused := m.audio.ctrl.Paused
 	speaker.Unlock()
 
-	// 1. Header and Status Badge
+	// 1. Header Row
 	var statusBadge string
 	if isPaused {
 		statusBadge = pausedStatusStyle.Render("⏸ PAUSED")
@@ -152,41 +161,28 @@ func (m UIModel) View() string {
 	}
 	headerRow := lipgloss.JoinHorizontal(lipgloss.Center, titleStyle.Render(" Minimal Music Player "), "   ", statusBadge)
 
-	// 2. Metadata Panel (Safely handles nil metadata)
-	var metadataPanel string
-	if m.metadata != nil {
-		// Fallback to "Unknown" if fields are empty strings
-		title := m.metadata.Title
-		if title == "" {
-			title = "Unknown Title"
-		}
-		artist := m.metadata.Artist
-		if artist == "" {
-			artist = "Unknown Artist"
-		}
-		album := m.metadata.Album
-		if album == "" {
-			album = "Unknown Album"
-		}
-		sampleRate := m.metadata.SampleRate
-		{
-			if sampleRate == 0 {
-				sampleRate = uint32(math.NaN()) // Default to CD quality if not available
-			}
-		}
+	// 2. Build the Left Panel
+	title := "Unknown Title"
+	artist := "Unknown Artist"
+	album := "Unknown Album"
+	sampleRateStr := "NaN Hz"
 
-		metadataPanel = fmt.Sprintf(
-			"%s%s\n%s%s\n%s%s\n%s%s\n",
-			labelStyle.Render("Title:"), valueStyle.Render(title),
-			labelStyle.Render("Artist:"), valueStyle.Render(artist),
-			labelStyle.Render("Album:"), valueStyle.Render(album),
-			labelStyle.Render("Sample Rate:"), valueStyle.Render(fmt.Sprintf("%d Hz", sampleRate)),
-		)
-	} else {
-		metadataPanel = labelStyle.Render("No Metadata Available\n")
+	if m.metadata != nil {
+		if m.metadata.Title != "" {
+			title = m.metadata.Title
+		}
+		if m.metadata.Artist != "" {
+			artist = m.metadata.Artist
+		}
+		if m.metadata.Album != "" {
+			album = m.metadata.Album
+		}
+		if m.metadata.SampleRate > 0 {
+			sampleRateStr = fmt.Sprintf("%d Hz", m.metadata.SampleRate)
+		}
 	}
 
-	// 3. Visual Progress Bar calculation (Width: 30 blocks)
+	// Progress Bar Calculations
 	barWidth := 30
 	var percent float64
 	if lengthIdx > 0 {
@@ -199,37 +195,122 @@ func (m UIModel) View() string {
 
 	progressBar := barFullStyle.Render(strings.Repeat("█", filledWidth)) +
 		barEmptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
-
 	timeFormat := fmt.Sprintf(" %s / %s", position.Round(time.Second), length.Round(time.Second))
-	progressRow := fmt.Sprintf("%s%s\n", progressBar, helpStyle.Render(timeFormat))
 
-	// 4. Audio Info Metrics Panel
-	// Fixed math logic from original code to map -5.0 -> 0.0 up to 0%-100%
+	// Metrics
 	volumePercent := int((volume + 5.0) / 5.0 * 100)
 	if volumePercent < 0 {
 		volumePercent = 0
 	}
 
-	metricsPanel := fmt.Sprintf(
-		"%s%s\n%s%s",
-		labelStyle.Render("Volume (A/S):"), valueStyle.Render(fmt.Sprintf("%d%%", volumePercent)),
-		labelStyle.Render("Speed  (Z/X):"), valueStyle.Render(fmt.Sprintf("%.2fx", speed)),
+	rawLeftColumn := lipgloss.JoinVertical(
+		lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Title:"), valueStyle.Render(title)),
+		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Artist:"), valueStyle.Render(artist)),
+		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Album:"), valueStyle.Render(album)),
+		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Samples:"), valueStyle.Render(sampleRateStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, progressBar, helpStyle.Render(timeFormat)),
+		"",
+		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Volume (A/S):"), valueStyle.Render(fmt.Sprintf("%d%%", volumePercent))),
+		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Speed  (Z/X):"), valueStyle.Render(fmt.Sprintf("%.2fx", speed))),
 	)
 
-	// 5. Compact Footer Controls Guide
+	// FIX: Give the left column a strictly defined horizontal canvas (48 characters wide)
+	// This ensures it never wraps unexpectedly and makes layout math predictable.
+	leftColumn := lipgloss.NewStyle().Width(48).Render(rawLeftColumn)
+
+	// 3. Build Right Panel (Album Art)
+	var rightColumn string
+	if m.metadata != nil && len(m.metadata.AlbumArt) > 0 {
+
+		targetWidth := 50 // High default fallback
+		if m.terminalWidth > 0 {
+			// FIX: Allocate 100% of the leftover terminal width directly to the album art.
+			// Math: Total Width minus Left Column (48), Main Outer Padding (4),
+			// and Right Column Margins/Borders (8) = 60 character buffer.
+			targetWidth = m.terminalWidth - 60
+
+			// Enforce structural limits so it renders properly even on extreme window sizes
+			if targetWidth < 30 {
+				targetWidth = 30
+			}
+			if targetWidth > 150 {
+				targetWidth = 150
+			}
+		}
+
+		// Pass the dynamic available width into the corrected renderer
+		artString := renderAlbumArt(m.metadata.AlbumArt, targetWidth)
+
+		if artString != "" {
+			rightColumn = lipgloss.NewStyle().
+				MarginLeft(4).
+				Border(lipgloss.NormalBorder(), false, false, false, true).
+				BorderForeground(gray).
+				PaddingLeft(2).
+				Render(artString)
+		}
+	}
+
+	// 4. Combine Left Column and Right Column Horizontally Safely
+	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
+
+	// 5. Footer & Assembly
 	footer := helpStyle.Render("⚡ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [Esc/Q] Quit")
 
-	// Assembly with the new metadataPanel section
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,
 		headerRow,
 		"",
-		metadataPanel, // Inserted metadata section here
-		progressRow,
-		metricsPanel,
+		mainLayout,
 		"",
 		footer,
 	)
 
-	return appStyle.Render(body) + "\n"
+	// FIX: Explicitly stretch the outermost application box style to span 100%
+	// of the available terminal window width.
+	activeAppStyle := appStyle.Copy()
+	if m.terminalWidth > 0 {
+		activeAppStyle = activeAppStyle.Width(m.terminalWidth - 4) // Subtract padding allowance
+	}
+
+	return activeAppStyle.Render(body) + "\n"
+}
+
+// renderAlbumArt converts the raw image bytes into an ANSI color string block
+func renderAlbumArt(artBytes []byte, width int) string {
+	if len(artBytes) == 0 {
+		return ""
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(artBytes))
+	if err != nil {
+		return ""
+	}
+
+	bounds := img.Bounds()
+	imgWidth := bounds.Dx()
+	imgHeight := bounds.Dy()
+
+	if imgWidth == 0 {
+		return ""
+	}
+
+	// Calculate target pixel dimensions directly to preserve original aspect ratio.
+	pixelWidth := width
+	pixelHeight := (width * imgHeight) / imgWidth
+
+	if pixelHeight == 0 {
+		pixelHeight = 1
+	}
+
+	// Resize the image to fit your target pixel dimensions precisely
+	scaledImg := resize.Resize(uint(pixelWidth), uint(pixelHeight), img, resize.Lanczos3)
+
+	ansiImg, err := ansimage.NewFromImage(scaledImg, color.Transparent, ansimage.DitheringWithBlocks)
+	if err != nil {
+		return ""
+	}
+
+	return ansiImg.Render()
 }

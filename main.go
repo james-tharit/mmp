@@ -32,6 +32,8 @@ type FLACMetadata struct {
 	Channels     uint8
 	BitDepth     uint8
 	TotalSamples uint64
+	AlbumArt     []byte // Raw image bytes
+	AlbumArtMime string // e.g., "image/jpeg" or "image/png"
 }
 
 func newAudioPanel(sampleRate beep.SampleRate, streamer beep.StreamSeeker) (*audioPanel, error) {
@@ -121,6 +123,59 @@ func getMetadata(filePath string) (*FLACMetadata, error) {
 							break
 						}
 					}
+				}
+			}
+		}
+
+		// Inside: for _, block := range file.Meta {
+
+		// BlockType 6 is PICTURE
+		if block.Type == 6 && len(block.Data) > 32 {
+			pos := 0
+
+			// 1. Picture Type (4 bytes) - Value 3 is usually "Front Cover"
+			pictureType := int(block.Data[pos])<<24 | int(block.Data[pos+1])<<16 | int(block.Data[pos+2])<<8 | int(block.Data[pos+3])
+			pos += 4
+
+			// 2. MIME type length (4 bytes)
+			mimeLen := int(block.Data[pos])<<24 | int(block.Data[pos+1])<<16 | int(block.Data[pos+2])<<8 | int(block.Data[pos+3])
+			pos += 4
+
+			if pos+mimeLen > len(block.Data) {
+				continue
+			}
+			mimeType := string(block.Data[pos : pos+mimeLen])
+			pos += mimeLen
+
+			// 3. Description length (4 bytes)
+			descLen := int(block.Data[pos])<<24 | int(block.Data[pos+1])<<16 | int(block.Data[pos+2])<<8 | int(block.Data[pos+3])
+			pos += 4
+
+			if pos+descLen > len(block.Data) {
+				continue
+			}
+			// Skip the description string, we don't strictly need it
+			pos += descLen
+
+			// 4. Dimensions & Color depth (16 bytes total: Width, Height, Depth, Indexed Colors)
+			pos += 16
+
+			// 5. Picture data length (4 bytes)
+			if pos+4 > len(block.Data) {
+				continue
+			}
+			dataLen := int(block.Data[pos])<<24 | int(block.Data[pos+1])<<16 | int(block.Data[pos+2])<<8 | int(block.Data[pos+3])
+			pos += 4
+
+			if pos+dataLen <= len(block.Data) {
+				// Extract the raw image bytes
+				imgData := make([]byte, dataLen)
+				copy(imgData, block.Data[pos:pos+dataLen])
+
+				// Prioritize Front Cover (Type 3), or take the first available image if not set yet
+				if pictureType == 3 || metadata.AlbumArt == nil {
+					metadata.AlbumArt = imgData
+					metadata.AlbumArtMime = mimeType
 				}
 			}
 		}
