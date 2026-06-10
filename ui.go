@@ -209,10 +209,10 @@ func (m UIModel) View() string {
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Artist:"), valueStyle.Render(artist)),
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Album:"), valueStyle.Render(album)),
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Samples:"), valueStyle.Render(sampleRateStr)),
-		lipgloss.JoinHorizontal(lipgloss.Left, progressBar, helpStyle.Render(timeFormat)),
-		"",
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Volume (A/S):"), valueStyle.Render(fmt.Sprintf("%d%%", volumePercent))),
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Speed  (Z/X):"), valueStyle.Render(fmt.Sprintf("%.2fx", speed))),
+		"",
+		lipgloss.JoinHorizontal(lipgloss.Left, progressBar, helpStyle.Render(timeFormat)),
 	)
 
 	// FIX: Give the left column a strictly defined horizontal canvas (48 characters wide)
@@ -267,14 +267,7 @@ func (m UIModel) View() string {
 		footer,
 	)
 
-	// FIX: Explicitly stretch the outermost application box style to span 100%
-	// of the available terminal window width.
-	activeAppStyle := appStyle.Copy()
-	if m.terminalWidth > 0 {
-		activeAppStyle = activeAppStyle.Width(m.terminalWidth - 4) // Subtract padding allowance
-	}
-
-	return activeAppStyle.Render(body) + "\n"
+	return appStyle.Render(body) + "\n"
 }
 
 // renderAlbumArt converts the raw image bytes into an ANSI color string block
