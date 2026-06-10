@@ -15,6 +15,7 @@ import (
 type UIModel struct {
 	audio    *audioPanel
 	filePath string
+	metadata *FLACMetadata
 }
 
 // Define Modern UI Theme Styles
@@ -52,10 +53,11 @@ var (
 )
 
 // NewUIModel creates and returns a new UI model
-func NewUIModel(filePath string, audio *audioPanel) UIModel {
+func NewUIModel(filePath string, audio *audioPanel, metadata *FLACMetadata) UIModel {
 	return UIModel{
 		audio:    audio,
 		filePath: filePath,
+		metadata: metadata,
 	}
 }
 
@@ -148,9 +150,43 @@ func (m UIModel) View() string {
 	} else {
 		statusBadge = playingStatusStyle.Render("▶ PLAYING")
 	}
-	headerRow := lipgloss.JoinHorizontal(lipgloss.Center, titleStyle.Render(" SPEEDY PLAYER "), "   ", statusBadge)
+	headerRow := lipgloss.JoinHorizontal(lipgloss.Center, titleStyle.Render(" Minimal Music Player "), "   ", statusBadge)
 
-	// 2. Visual Progress Bar calculation (Width: 30 blocks)
+	// 2. Metadata Panel (Safely handles nil metadata)
+	var metadataPanel string
+	if m.metadata != nil {
+		// Fallback to "Unknown" if fields are empty strings
+		title := m.metadata.Title
+		if title == "" {
+			title = "Unknown Title"
+		}
+		artist := m.metadata.Artist
+		if artist == "" {
+			artist = "Unknown Artist"
+		}
+		album := m.metadata.Album
+		if album == "" {
+			album = "Unknown Album"
+		}
+		sampleRate := m.metadata.SampleRate
+		{
+			if sampleRate == 0 {
+				sampleRate = uint32(math.NaN()) // Default to CD quality if not available
+			}
+		}
+
+		metadataPanel = fmt.Sprintf(
+			"%s%s\n%s%s\n%s%s\n%s%s\n",
+			labelStyle.Render("Title:"), valueStyle.Render(title),
+			labelStyle.Render("Artist:"), valueStyle.Render(artist),
+			labelStyle.Render("Album:"), valueStyle.Render(album),
+			labelStyle.Render("Sample Rate:"), valueStyle.Render(fmt.Sprintf("%d Hz", sampleRate)),
+		)
+	} else {
+		metadataPanel = labelStyle.Render("No Metadata Available\n")
+	}
+
+	// 3. Visual Progress Bar calculation (Width: 30 blocks)
 	barWidth := 30
 	var percent float64
 	if lengthIdx > 0 {
@@ -167,8 +203,9 @@ func (m UIModel) View() string {
 	timeFormat := fmt.Sprintf(" %s / %s", position.Round(time.Second), length.Round(time.Second))
 	progressRow := fmt.Sprintf("%s%s\n", progressBar, helpStyle.Render(timeFormat))
 
-	// 3. Audio Info Metrics Panel
-	volumePercent := int((volume + 5.0) / 7.0 * 100) // Rough map to an easily read 0-100% metric
+	// 4. Audio Info Metrics Panel
+	// Fixed math logic from original code to map -5.0 -> 0.0 up to 0%-100%
+	volumePercent := int((volume + 5.0) / 5.0 * 100)
 	if volumePercent < 0 {
 		volumePercent = 0
 	}
@@ -179,14 +216,15 @@ func (m UIModel) View() string {
 		labelStyle.Render("Speed  (Z/X):"), valueStyle.Render(fmt.Sprintf("%.2fx", speed)),
 	)
 
-	// 4. Compact Footer Controls Guide
+	// 5. Compact Footer Controls Guide
 	footer := helpStyle.Render("⚡ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [Esc/Q] Quit")
 
-	// Assembly
+	// Assembly with the new metadataPanel section
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,
 		headerRow,
 		"",
+		metadataPanel, // Inserted metadata section here
 		progressRow,
 		metricsPanel,
 		"",

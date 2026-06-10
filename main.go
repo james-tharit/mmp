@@ -165,11 +165,11 @@ func main() {
 	if err != nil {
 		report(err)
 	}
-	fmt.Printf("Title: %s\nArtist: %s\nAlbum: %s\nDate: %s\nDuration: %d seconds\nSample Rate: %d Hz\nChannels: %d\nBit Depth: %d\n",
-		metadata.Title, metadata.Artist, metadata.Album, metadata.Date, metadata.Duration, metadata.SampleRate, metadata.Channels, metadata.BitDepth)
+	// fmt.Printf("Title: %s\nArtist: %s\nAlbum: %s\nDate: %s\nDuration: %d seconds\nSample Rate: %d Hz\nChannels: %d\nBit Depth: %d\n",
+	// 	metadata.Title, metadata.Artist, metadata.Album, metadata.Date, metadata.Duration, metadata.SampleRate, metadata.Channels, metadata.BitDepth)
 
 	// Create and run BubbleTea app
-	model := NewUIModel(os.Args[1], ap)
+	model := NewUIModel(os.Args[1], ap, metadata)
 	p := tea.NewProgram(model)
 
 	if _, err := p.Run(); err != nil {
