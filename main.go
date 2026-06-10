@@ -17,7 +17,7 @@ import (
 
 type audioPanel struct {
 	sampleRate beep.SampleRate
-	streamer   beep.StreamSeeker
+	streamer   beep.StreamSeekCloser
 	ctrl       *beep.Ctrl
 	resampler  *beep.Resampler
 	volume     *effects.Volume
@@ -38,16 +38,33 @@ type FLACMetadata struct {
 	AlbumArtMime string // e.g., "image/jpeg" or "image/png"
 }
 
-func newAudioPanel(sampleRate beep.SampleRate, streamer beep.StreamSeeker) (*audioPanel, error) {
+// hardware sample rate
+var speakerSR beep.SampleRate
+
+func newAudioPanel(sampleRate beep.SampleRate, streamer beep.StreamSeekCloser) (*audioPanel, error) {
 	loopStreamer, err := beep.Loop2(streamer)
 	if err != nil {
 		return nil, err
 	}
 
 	ctrl := &beep.Ctrl{Streamer: loopStreamer}
-	resampler := beep.ResampleRatio(4, 1, ctrl)
-	volume := &effects.Volume{Streamer: resampler, Base: 2}
-	return &audioPanel{sampleRate, streamer, ctrl, resampler, volume}, nil
+
+	// 1. This handles user-directed speed adjustments (the Z and X hotkeys)
+	speedResampler := beep.ResampleRatio(4, 1.0, ctrl)
+
+	// 2. This seamlessly maps the song's native sample rate to your global hardware rate
+	speakerResampler := beep.Resample(4, sampleRate, speakerSR, speedResampler)
+
+	// 3. Wrap everything up in your volume modifier
+	volume := &effects.Volume{Streamer: speakerResampler, Base: 2}
+
+	return &audioPanel{
+		sampleRate: sampleRate,
+		streamer:   streamer,
+		ctrl:       ctrl,
+		resampler:  speedResampler, // Assign speed layer here so your Z/X keybinds still map safely
+		volume:     volume,
+	}, nil
 }
 
 func (ap *audioPanel) play() {
@@ -230,13 +247,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 3. Setup and play the first track (for backwards compatibility with your UI)
+	// 3. Setup and play the first track initially
 	firstTrack := flacFiles[0]
 
 	f, err := os.Open(firstTrack)
 	if err != nil {
 		report(err)
 	}
+	// Note: these stay open for the first track until main exits,
+	// which is perfectly fine since the UI handles closing later tracks.
 	defer f.Close()
 
 	streamer, format, err := flac.Decode(f)
@@ -245,8 +264,10 @@ func main() {
 	}
 	defer streamer.Close()
 
-	// Initialize speaker
-	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/30))
+	// Save the baseline hardware sample rate globally
+	speakerSR = format.SampleRate
+	// Initialize speaker using the first track's sample rate as the hardware baseline
+	speaker.Init(speakerSR, speakerSR.N(time.Millisecond*100))
 	defer speaker.Close()
 
 	ap, err := newAudioPanel(format.SampleRate, streamer)
@@ -261,8 +282,8 @@ func main() {
 		report(err)
 	}
 
-	// 4. Pass data to BubbleTea
-	model := NewUIModel(firstTrack, ap, metadata)
+	// 4. Pass the whole PLAYLIST slice to BubbleTea instead of just the first track string
+	model := NewUIModel(flacFiles, ap, metadata)
 	p := tea.NewProgram(model)
 
 	if _, err := p.Run(); err != nil {
