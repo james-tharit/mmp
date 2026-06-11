@@ -72,3 +72,14 @@ Or run directly:
 ```bash
 go run main.go song.flac
 ```
+
+
+Change .m4a to .flac
+```sh
+ffmpeg -i <song>.m4a -c:a flac <output>.flac
+```
+
+See Metadata of file
+```sh
+ffprobe -v error -show_entries format_tags:stream_tags -of default=noprint_wrappers=1 <target>.flac
+```

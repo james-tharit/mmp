@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	_ "image/jpeg" // FIX 1: Required to decode JPEG album art
+	_ "image/png"  // FIX 1: Required to decode PNG album art
 	"math"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/eliukblau/pixterm/pkg/ansimage"
 	"github.com/gopxl/beep/v2/speaker"
-	"github.com/nfnt/resize"
+	"golang.org/x/image/draw"
 )
 
 // UIModel represents the BubbleTea application state
@@ -332,20 +333,21 @@ func (m *UIModel) recalculateAlbumArt() {
 		return
 	}
 
-	targetWidth := 50
-	if m.terminalWidth > 0 {
-		targetWidth = m.terminalWidth - 60
-		if targetWidth < 30 {
-			targetWidth = 30
+	targetWidth := 24
+	if m.terminalWidth < 24 {
+		targetWidth = m.terminalWidth - 12
+		if targetWidth < 12 {
+			targetWidth = 6
 		}
 	}
 
+	// 2. Render the high-quality ANSI block
 	m.albumArtCache = renderAlbumArt(m.metadata.AlbumArt, targetWidth)
 }
 
-// renderAlbumArt converts the raw image bytes into an ANSI color string block
+// renderAlbumArt converts raw image bytes into a high-quality 24-bit ANSI string
 func renderAlbumArt(artBytes []byte, width int) string {
-	if len(artBytes) == 0 {
+	if len(artBytes) == 0 || width <= 0 {
 		return ""
 	}
 
@@ -358,11 +360,12 @@ func renderAlbumArt(artBytes []byte, width int) string {
 	imgWidth := bounds.Dx()
 	imgHeight := bounds.Dy()
 
-	if imgWidth == 0 {
+	if imgWidth == 0 || imgHeight == 0 {
 		return ""
 	}
 
-	// Calculate target pixel dimensions directly to preserve original aspect ratio.
+	// Calculate target pixel dimensions.
+	// width = target columns. pixelHeight = target rows.
 	pixelWidth := width
 	pixelHeight := (width * imgHeight) / imgWidth
 
@@ -370,13 +373,34 @@ func renderAlbumArt(artBytes []byte, width int) string {
 		pixelHeight = 1
 	}
 
-	// Resize the image to fit your target pixel dimensions precisely
-	scaledImg := resize.Resize(uint(pixelWidth), uint(pixelHeight), img, resize.Lanczos3)
+	// 1. High-quality scaling using x/image/draw (Catmull-Rom interpolation)
+	dst := image.NewRGBA(image.Rect(0, 0, pixelWidth, pixelHeight))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
 
-	ansiImg, err := ansimage.NewFromImage(scaledImg, color.Transparent, ansimage.DitheringWithBlocks)
-	if err != nil {
-		return ""
+	// 2. Build the ANSI string using True Color (24-bit) and Half-Blocks
+	var sb strings.Builder
+
+	// Step by 2 vertically because 1 terminal character will hold 2 vertical pixels
+	for y := 0; y < pixelHeight; y += 2 {
+		for x := 0; x < pixelWidth; x++ {
+			// Get the top pixel (Foreground)
+			top := dst.RGBAAt(x, y)
+
+			// Get the bottom pixel (Background) - defaulting to transparent/black if out of bounds
+			bottom := color.RGBA{}
+			if y+1 < pixelHeight {
+				bottom = dst.RGBAAt(x, y+1)
+			}
+
+			// Format: \x1b[38;2;R;G;B;48;2;R;G;Bm▀
+			// 38;2 sets foreground True Color, 48;2 sets background True Color
+			sb.WriteString(fmt.Sprintf("\x1b[38;2;%d;%d;%d;48;2;%d;%d;%dm▀",
+				top.R, top.G, top.B,
+				bottom.R, bottom.G, bottom.B))
+		}
+		// Reset ANSI formatting at the end of the row and add a newline
+		sb.WriteString("\x1b[0m\n")
 	}
 
-	return ansiImg.Render()
+	return sb.String()
 }

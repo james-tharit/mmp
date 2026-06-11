@@ -85,13 +85,13 @@ func getMetadata(filePath string) (*FLACMetadata, error) {
 							value := comment[j+1:]
 
 							switch key {
-							case "TITLE":
+							case "TITLE", "title":
 								metadata.Title = value
-							case "ARTIST":
+							case "ARTIST", "artist":
 								metadata.Artist = value
-							case "ALBUM":
+							case "ALBUM", "album":
 								metadata.Album = value
-							case "DATE":
+							case "DATE", "date":
 								metadata.Date = value
 							}
 							break
