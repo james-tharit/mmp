@@ -6,14 +6,12 @@ import (
 	"image"
 	"image/color"
 	"math"
-	"os"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/eliukblau/pixterm/pkg/ansimage"
-	"github.com/gopxl/beep/v2/flac"
 	"github.com/gopxl/beep/v2/speaker"
 	"github.com/nfnt/resize"
 )
@@ -21,20 +19,13 @@ import (
 // UIModel represents the BubbleTea application state
 type UIModel struct {
 	audio         *audioPanel
-	playlist      []string // Replaced filePath string
+	playlist      []string // path to directory of flac files
 	currentIdx    int      // Keep track of current song
 	metadata      *FLACMetadata
 	terminalWidth int
 	loading       bool   // UI flag to show loading state during track changes
 	err           error  // Store playback/loading errors
 	albumArtCache string // prerendered ANSI album art string to avoid re-rendering every tick
-}
-
-// TrackLoadedMsg is sent when a new track finishes loading
-type TrackLoadedMsg struct {
-	audio    *audioPanel
-	metadata *FLACMetadata
-	err      error
 }
 
 var (
@@ -80,6 +71,7 @@ func NewUIModel(playlist []string, audio *audioPanel, metadata *FLACMetadata) UI
 	}
 }
 
+// custom message for ticking the UI
 type tickMsg time.Time
 
 func (m UIModel) tick() tea.Cmd {
@@ -88,43 +80,14 @@ func (m UIModel) tick() tea.Cmd {
 	})
 }
 
-// loadTrackCmd asynchronously loads a new track so the UI doesn't freeze
-func loadTrackCmd(filePath string) tea.Cmd {
-	return func() tea.Msg {
-		f, err := os.Open(filePath)
-		if err != nil {
-			return TrackLoadedMsg{err: err}
-		}
-		// Note: We don't defer f.Close() here because the streamer needs it open.
-		// Your audioPanel or streamer.Close() will handle closing it eventually.
-		streamer, format, err := flac.Decode(f)
-		if err != nil {
-			return TrackLoadedMsg{err: err}
-		}
-
-		ap, err := newAudioPanel(format.SampleRate, streamer)
-		if err != nil {
-			return TrackLoadedMsg{err: err}
-		}
-
-		metadata, err := getMetadata(filePath)
-		if err != nil {
-			return TrackLoadedMsg{err: err}
-		}
-
-		return TrackLoadedMsg{
-			audio:    ap,
-			metadata: metadata,
-		}
-	}
-}
-
 func (m UIModel) Init() tea.Cmd {
 	return m.tick()
 }
 
 func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		return m, m.tick()
 
 	case TrackLoadedMsg:
 		m.loading = false
@@ -153,7 +116,7 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recalculateAlbumArt()
 
 		// 5. Fire off the new track playback
-		m.audio.play()
+		m.audio.Play()
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -349,7 +312,7 @@ func (m UIModel) View() string {
 
 	// 5. Footer & Assembly
 	// ADDED: [N/P] Next/Prev to the footer instructions
-	footer := helpStyle.Render("⚡ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [Esc/Q] Quit")
+	footer := helpStyle.Render("🛰️ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [Esc/Q] Quit")
 
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -374,9 +337,6 @@ func (m *UIModel) recalculateAlbumArt() {
 		targetWidth = m.terminalWidth - 60
 		if targetWidth < 30 {
 			targetWidth = 30
-		}
-		if targetWidth > 150 {
-			targetWidth = 150
 		}
 	}
 
