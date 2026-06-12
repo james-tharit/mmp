@@ -265,18 +265,8 @@ func (m UIModel) View() string {
 	}
 
 	// Progress Bar Calculations
-	barWidth := 30
-	var percent float64
-	if lengthIdx > 0 {
-		percent = float64(positionIdx) / float64(lengthIdx)
-	}
-	filledWidth := int(math.Round(percent * float64(barWidth)))
-	if filledWidth > barWidth {
-		filledWidth = barWidth
-	}
+	progressBar := m.renderProgressBar(position, length)
 
-	progressBar := barFullStyle.Render(strings.Repeat("█", filledWidth)) +
-		barEmptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
 	timeFormat := fmt.Sprintf(" %s / %s", position.Round(time.Second), length.Round(time.Second))
 
 	// Metrics
@@ -378,6 +368,29 @@ func (m UIModel) View() string {
 	)
 
 	return appStyle.Render(body) + "\n"
+}
+
+func (m *UIModel) renderProgressBar(position, length time.Duration) string {
+	percent := 0.0
+	barWidth := 30
+
+	// 1. Calculate the percentage first
+	if length > 0 {
+		percent = float64(position) / float64(length)
+	}
+
+	// 2. Now calculate the filled width based on that percentage
+	filledWidth := int(math.Round(percent * float64(barWidth)))
+
+	// Safety bounds check
+	if filledWidth > barWidth {
+		filledWidth = barWidth
+	} else if filledWidth < 0 {
+		filledWidth = 0 // Good practice just in case position is negative
+	}
+
+	return barFullStyle.Render(strings.Repeat("█", filledWidth)) +
+		barEmptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
 }
 
 func (m *UIModel) recalculateAlbumArt() {
