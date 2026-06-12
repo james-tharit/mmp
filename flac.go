@@ -26,6 +26,20 @@ func isFlac(filename string) bool {
 	return strings.HasSuffix(strings.ToLower(filename), ".flac")
 }
 
+func getAllMetadata(filePaths []string) ([]*FLACMetadata, error) {
+	var metadataList []*FLACMetadata
+	for _, filePath := range filePaths {
+		if isFlac(filePath) {
+			metadata, err := getMetadata(filePath)
+			if err != nil {
+				return nil, err
+			}
+			metadataList = append(metadataList, metadata)
+		}
+	}
+	return metadataList, nil
+}
+
 // getMetadata extracts FLAC metadata from a file
 func getMetadata(filePath string) (*FLACMetadata, error) {
 	// Parse FLAC file using go-flac library

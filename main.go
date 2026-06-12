@@ -94,8 +94,14 @@ func main() {
 		report(err)
 	}
 
+	// Get metadata for all songs in the playlist
+	playlistMetadata, err := getAllMetadata(flacFiles)
+	if err != nil {
+		report(err)
+	}
+
 	// 4. Pass the whole PLAYLIST slice to BubbleTea instead of just the first track string
-	model := NewUIModel(flacFiles, ap, metadata)
+	model := NewUIModel(flacFiles, ap, metadata, playlistMetadata)
 	p := tea.NewProgram(model)
 
 	if _, err := p.Run(); err != nil {

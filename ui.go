@@ -19,14 +19,15 @@ import (
 
 // UIModel represents the BubbleTea application state
 type UIModel struct {
-	audio         *audioPanel
-	playlist      []string // path to directory of flac files
-	currentIdx    int      // Keep track of current song
-	metadata      *FLACMetadata
-	terminalWidth int
-	loading       bool   // UI flag to show loading state during track changes
-	err           error  // Store playback/loading errors
-	albumArtCache string // prerendered ANSI album art string to avoid re-rendering every tick
+	audio            *audioPanel
+	playlist         []string        // path to directory of flac files
+	playlistMetadata []*FLACMetadata // metadata for all songs in playlist
+	currentIdx       int             // Keep track of current song
+	metadata         *FLACMetadata
+	terminalWidth    int
+	loading          bool   // UI flag to show loading state during track changes
+	err              error  // Store playback/loading errors
+	albumArtCache    string // prerendered ANSI album art string to avoid re-rendering every tick
 }
 
 var (
@@ -63,12 +64,13 @@ var (
 )
 
 // NewUIModel creates and returns a new UI model with a playlist
-func NewUIModel(playlist []string, audio *audioPanel, metadata *FLACMetadata) UIModel {
+func NewUIModel(playlist []string, audio *audioPanel, metadata *FLACMetadata, playlistMetadata []*FLACMetadata) UIModel {
 	return UIModel{
-		audio:      audio,
-		playlist:   playlist,
-		currentIdx: 0,
-		metadata:   metadata,
+		audio:            audio,
+		playlist:         playlist,
+		playlistMetadata: playlistMetadata,
+		currentIdx:       0,
+		metadata:         metadata,
 	}
 }
 
@@ -297,21 +299,72 @@ func (m UIModel) View() string {
 
 	leftColumn := lipgloss.NewStyle().Width(48).Render(rawLeftColumn)
 
-	// 3. Build Right Panel (Album Art) using the PRE-RENDERED Cache
+	// 3. Build Middle Panel (Playlist)
+	var songLines []string
+	for i, metadata := range m.playlistMetadata {
+		songTitle := "Unknown"
+		songArtist := "Unknown"
+
+		if metadata != nil {
+			if metadata.Title != "" {
+				songTitle = metadata.Title
+			}
+			if metadata.Artist != "" {
+				songArtist = metadata.Artist
+			}
+		}
+
+		songLine := fmt.Sprintf("%s - %s", songTitle, songArtist)
+
+		// Highlight currently playing track
+		if i == m.currentIdx {
+			songLine = playingStatusStyle.Render("▶ " + songLine)
+		} else {
+			songLine = "  " + songLine
+		}
+
+		songLines = append(songLines, songLine)
+	}
+
+	// Create a scrollable playlist view (show max 10 songs at a time, centered on current)
+	maxSongsVisible := 10
+	var playlistView []string
+
+	startIdx := m.currentIdx - (maxSongsVisible / 2)
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := startIdx + maxSongsVisible
+	if endIdx > len(songLines) {
+		endIdx = len(songLines)
+		startIdx = endIdx - maxSongsVisible
+		if startIdx < 0 {
+			startIdx = 0
+		}
+	}
+
+	playlistView = songLines[startIdx:endIdx]
+
+	middleColumn := lipgloss.NewStyle().
+		Width(40).
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(gray).
+		PaddingLeft(2).
+		PaddingRight(1).
+		Render(lipgloss.JoinVertical(lipgloss.Left, playlistView...))
+
+	// 5. Build Right Panel (Album Art) using the PRE-RENDERED Cache
 	var rightColumn string
 	if m.albumArtCache != "" {
 		rightColumn = lipgloss.NewStyle().
-			MarginLeft(4).
-			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(gray).
-			PaddingLeft(2).
+			MarginLeft(2).
 			Render(m.albumArtCache)
 	}
 
-	// 4. Combine Left Column and Right Column
-	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
+	// 6. Combine Left, Middle, and Right Columns
+	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, middleColumn, rightColumn)
 
-	// 5. Footer & Assembly
+	// 7. Footer & Assembly
 	// ADDED: [N/P] Next/Prev to the footer instructions
 	footer := helpStyle.Render("🛰️ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [Esc/Q] Quit")
 
