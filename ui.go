@@ -133,28 +133,28 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 
-		case "n": // NEXT TRACK
+		case "n", "down": // NEXT TRACK
 			if !m.loading && m.currentIdx < len(m.playlist)-1 {
 				m.currentIdx++
 				m.loading = true
 				return m, loadTrackCmd(m.playlist[m.currentIdx])
 			}
 
-		case "p": // PREVIOUS TRACK
+		case "p", "up": // PREVIOUS TRACK
 			if !m.loading && m.currentIdx > 0 {
 				m.currentIdx--
 				m.loading = true
 				return m, loadTrackCmd(m.playlist[m.currentIdx])
 			}
 
-		case " ":
+		case " ": // Pause/Play
 			if m.audio != nil {
 				speaker.Lock()
 				m.audio.ctrl.Paused = !m.audio.ctrl.Paused
 				speaker.Unlock()
 			}
 
-		case "w", "right":
+		case "right":
 			if m.audio != nil {
 				speaker.Lock()
 				newPos := m.audio.streamer.Position() + m.audio.sampleRate.N(time.Second*5)
@@ -244,6 +244,50 @@ func (m UIModel) View() string {
 	headerRow := lipgloss.JoinHorizontal(lipgloss.Center, titleStyle.Render(titleText), "   ", statusBadge)
 
 	// 2. Build the Left Panel
+	middleColumn := m.renderMetadataInformation(position, length, volume, speed)
+
+	// 5. Build Right Panel (Album Art) using the PRE-RENDERED Cache
+	leftColumn := ""
+	if m.albumArtCache != "" {
+		leftColumn = lipgloss.NewStyle().
+			MarginLeft(2).
+			Render(m.albumArtCache)
+	}
+
+	// 3. Build Middle Panel (Playlist)
+	rightColumn := m.renderSongList(43)
+
+	// 6. Combine Left, Middle, and Right Columns
+	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, middleColumn, rightColumn)
+
+	// 7. Footer & Assembly
+	// ADDED: [N/P] Next/Prev to the footer instructions
+	footer := helpStyle.Render("🛰️ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [Esc/Q] Quit")
+
+	body := lipgloss.JoinVertical(
+		lipgloss.Left,
+		headerRow,
+		"",
+		mainLayout,
+		"",
+		footer,
+	)
+
+	return appStyle.Render(body) + "\n"
+}
+
+func (m *UIModel) renderMetadataInformation(position, length time.Duration, volume float64, speed float64) string {
+
+	progressBar := m.renderProgressBar(position, length)
+
+	timeFormat := fmt.Sprintf(" %s / %s", position.Round(time.Second), length.Round(time.Second))
+
+	// Metrics
+	volumePercent := int((volume + 5.0) / 5.0 * 100)
+	if volumePercent < 0 {
+		volumePercent = 0
+	}
+
 	title := "Unknown Title"
 	artist := "Unknown Artist"
 	album := "Unknown Album"
@@ -264,17 +308,6 @@ func (m UIModel) View() string {
 		}
 	}
 
-	// Progress Bar Calculations
-	progressBar := m.renderProgressBar(position, length)
-
-	timeFormat := fmt.Sprintf(" %s / %s", position.Round(time.Second), length.Round(time.Second))
-
-	// Metrics
-	volumePercent := int((volume + 5.0) / 5.0 * 100)
-	if volumePercent < 0 {
-		volumePercent = 0
-	}
-
 	rawLeftColumn := lipgloss.JoinVertical(
 		lipgloss.Left,
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Title:"), valueStyle.Render(title)),
@@ -284,12 +317,19 @@ func (m UIModel) View() string {
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Volume (A/S):"), valueStyle.Render(fmt.Sprintf("%d%%", volumePercent))),
 		lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render("Speed  (Z/X):"), valueStyle.Render(fmt.Sprintf("%.2fx", speed))),
 		"",
-		lipgloss.JoinHorizontal(lipgloss.Left, progressBar, helpStyle.Render(timeFormat)),
+		lipgloss.JoinHorizontal(lipgloss.Left, progressBar),
+		lipgloss.JoinHorizontal(lipgloss.Left, helpStyle.Render(timeFormat)),
 	)
 
-	leftColumn := lipgloss.NewStyle().Width(48).Render(rawLeftColumn)
+	return lipgloss.NewStyle().
+		Width(52).
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(gray).
+		PaddingLeft(2).
+		PaddingRight(1).Render(rawLeftColumn)
+}
 
-	// 3. Build Middle Panel (Playlist)
+func (m *UIModel) renderSongList(width int) string {
 	var songLines []string
 	for i, metadata := range m.playlistMetadata {
 		songTitle := "Unknown"
@@ -335,39 +375,13 @@ func (m UIModel) View() string {
 
 	playlistView = songLines[startIdx:endIdx]
 
-	middleColumn := lipgloss.NewStyle().
-		Width(40).
+	return lipgloss.NewStyle().
+		Width(width).
 		Border(lipgloss.NormalBorder(), false, false, false, true).
 		BorderForeground(gray).
 		PaddingLeft(2).
 		PaddingRight(1).
 		Render(lipgloss.JoinVertical(lipgloss.Left, playlistView...))
-
-	// 5. Build Right Panel (Album Art) using the PRE-RENDERED Cache
-	var rightColumn string
-	if m.albumArtCache != "" {
-		rightColumn = lipgloss.NewStyle().
-			MarginLeft(2).
-			Render(m.albumArtCache)
-	}
-
-	// 6. Combine Left, Middle, and Right Columns
-	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, middleColumn, rightColumn)
-
-	// 7. Footer & Assembly
-	// ADDED: [N/P] Next/Prev to the footer instructions
-	footer := helpStyle.Render("🛰️ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [Esc/Q] Quit")
-
-	body := lipgloss.JoinVertical(
-		lipgloss.Left,
-		headerRow,
-		"",
-		mainLayout,
-		"",
-		footer,
-	)
-
-	return appStyle.Render(body) + "\n"
 }
 
 func (m *UIModel) renderProgressBar(position, length time.Duration) string {
