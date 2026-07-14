@@ -35,16 +35,18 @@ func main() {
 	var flacFiles []string
 
 	if fileInfo.IsDir() {
-		// Scenario A: It's a directory, scan for FLAC files
-		files, err := os.ReadDir(targetPath)
+		// Scenario A: It's a directory, scan it and all sub-directories for FLAC files
+		err := filepath.WalkDir(targetPath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() && isFlac(d.Name()) {
+				flacFiles = append(flacFiles, path)
+			}
+			return nil
+		})
 		if err != nil {
 			report(fmt.Errorf("failed to read directory: %w", err))
-		}
-
-		for _, file := range files {
-			if !file.IsDir() && isFlac(file.Name()) {
-				flacFiles = append(flacFiles, filepath.Join(targetPath, file.Name()))
-			}
 		}
 	} else {
 		// Scenario B: It's a single file, verify it's a FLAC
