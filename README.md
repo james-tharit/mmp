@@ -42,11 +42,15 @@ This application uses a clean, pure-Go architecture with real-time audio control
 
 ### Linux Setup (Debian / Ubuntu / Kali)
 
-Install the necessary audio development libraries:
+Install the necessary audio libraries, plus the OpenGL/X11/Wayland
+development headers the GUI (Fyne) needs to build:
 ```bash
 sudo apt update
-sudo apt install libasound2-dev -y
+sudo apt install -y libasound2-dev \
+  libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libxxf86vm-dev
 ```
+The `libgl1-mesa-dev … libxxf86vm-dev` packages are only required for the GUI.
+The TUI (`-tui`) builds and runs without them.
 
 ### macOS Setup
 
@@ -64,8 +68,11 @@ go mod tidy
 # Build the application
 go build -o mmp
 
-# Run with a FLAC file
+# Run with a FLAC file (GUI is the default)
 ./mmp song.flac
+
+# Force the terminal UI instead
+./mmp -tui song.flac
 ```
 
 Or run directly:
