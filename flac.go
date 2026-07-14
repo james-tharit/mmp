@@ -95,17 +95,18 @@ func getMetadata(filePath string) (*FLACMetadata, error) {
 					// Parse key=value format
 					for j := 0; j < len(comment); j++ {
 						if comment[j] == '=' {
-							key := comment[:j]
+							// Vorbis comment field names are case-insensitive per spec.
+							key := strings.ToUpper(comment[:j])
 							value := comment[j+1:]
 
 							switch key {
-							case "TITLE", "title":
+							case "TITLE":
 								metadata.Title = value
-							case "ARTIST", "artist":
+							case "ARTIST":
 								metadata.Artist = value
-							case "ALBUM", "album":
+							case "ALBUM":
 								metadata.Album = value
-							case "DATE", "date":
+							case "DATE":
 								metadata.Date = value
 							}
 							break
