@@ -8,7 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-flac/go-flac/v2 v2.0.4
 	github.com/gopxl/beep/v2 v2.1.1
-	golang.org/x/image v0.24.0
+	golang.org/x/image v0.41.0
 )
 
 require (
@@ -64,6 +64,6 @@ require (
 	github.com/yuin/goldmark v1.8.2 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
