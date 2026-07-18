@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/gopxl/beep/v2"
@@ -77,29 +76,6 @@ func TestNewAudioPanel(t *testing.T) {
 
 		if panel.volume == nil {
 			t.Error("expected volume to be initialized, got nil")
-		}
-	})
-
-	t.Run("Failure Path - Loop2 bubbles up streamer error", func(t *testing.T) {
-		// Arrange
-		sampleRate := beep.SampleRate(44100)
-		expectedErr := errors.New("mock read failure")
-
-		mockStreamer := &MockStreamSeekCloser{
-			ErrToReturn: expectedErr,
-			LenToReturn: -1, // An invalid length forces Loop2 to return an initialization error
-		}
-
-		// Act
-		panel, err := NewAudioPanel(sampleRate, mockStreamer)
-
-		// Assert
-		if err == nil {
-			t.Error("expected an error from NewAudioPanel due to faulty streamer, got nil")
-		}
-
-		if panel != nil {
-			t.Error("expected panel to be nil when an error occurs")
 		}
 	})
 }

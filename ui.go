@@ -26,6 +26,7 @@ type UIModel struct {
 	metadata         *FLACMetadata
 	terminalWidth    int
 	loading          bool   // UI flag to show loading state during track changes
+	shuffle          bool   // when true, advance to a random track
 	err              error  // Store playback/loading errors
 	albumArtCache    string // prerendered ANSI album art string to avoid re-rendering every tick
 }
@@ -98,6 +99,19 @@ func (m UIModel) Init() tea.Cmd {
 func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
+		// Auto-advance: when the current track has drained, load the next one.
+		if m.audio != nil && !m.loading {
+			speaker.Lock()
+			ended := m.audio.streamer.Position() >= m.audio.streamer.Len()
+			speaker.Unlock()
+			if ended {
+				if idx := nextTrackIndex(m.currentIdx, len(m.playlist), m.shuffle); idx >= 0 {
+					m.currentIdx = idx
+					m.loading = true
+					return m, tea.Batch(m.tick(), loadTrackCmd(m.playlist[idx]))
+				}
+			}
+		}
 		return m, m.tick()
 
 	case TrackLoadedMsg:
@@ -142,11 +156,16 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "n", "down": // NEXT TRACK
-			if !m.loading && m.currentIdx < len(m.playlist)-1 {
-				m.currentIdx++
-				m.loading = true
-				return m, loadTrackCmd(m.playlist[m.currentIdx])
+			if !m.loading {
+				if idx := nextTrackIndex(m.currentIdx, len(m.playlist), m.shuffle); idx >= 0 {
+					m.currentIdx = idx
+					m.loading = true
+					return m, loadTrackCmd(m.playlist[idx])
+				}
 			}
+
+		case "r": // toggle shuffle
+			m.shuffle = !m.shuffle
 
 		case "p", "up": // PREVIOUS TRACK
 			if !m.loading && m.currentIdx > 0 {
@@ -269,8 +288,11 @@ func (m UIModel) View() string {
 	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, middleColumn, rightColumn)
 
 	// 7. Footer & Assembly
-	// ADDED: [N/P] Next/Prev to the footer instructions
-	footer := helpStyle.Render("🛰️ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [Esc/Q] Quit")
+	shuffleState := "OFF"
+	if m.shuffle {
+		shuffleState = "ON"
+	}
+	footer := helpStyle.Render(fmt.Sprintf("🛰️ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [R] Shuffle:%s • [Esc/Q] Quit", shuffleState))
 
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,

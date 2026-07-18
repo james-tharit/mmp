@@ -26,8 +26,10 @@ type guiUI struct {
 	metadata         *FLACMetadata
 	currentIdx       int
 	loading          bool
+	shuffle          bool
 
 	// widgets
+	shuffleBtn *widget.Button
 	titleLbl  *widget.Label
 	artistLbl *widget.Label
 	albumLbl  *widget.Label
@@ -124,7 +126,17 @@ func RunGUI(playlist []string, audio *audioPanel, metadata *FLACMetadata, playli
 		speaker.Unlock()
 	})
 	nextBtn := widget.NewButtonWithIcon("", theme.MediaSkipNextIcon(), func() {
-		m.switchTrack(m.currentIdx + 1)
+		if idx := nextTrackIndex(m.currentIdx, len(m.playlist), m.shuffle); idx >= 0 {
+			m.switchTrack(idx)
+		}
+	})
+	m.shuffleBtn = widget.NewButton("Shuffle: OFF", func() {
+		m.shuffle = !m.shuffle
+		if m.shuffle {
+			m.shuffleBtn.SetText("Shuffle: ON")
+		} else {
+			m.shuffleBtn.SetText("Shuffle: OFF")
+		}
 	})
 
 	// Volume buttons
@@ -192,7 +204,7 @@ func RunGUI(playlist []string, audio *audioPanel, metadata *FLACMetadata, playli
 		container.NewHBox(widget.NewLabel("Speed:"), m.speedLbl, speedDownBtn, speedUpBtn),
 	)
 	top := container.NewBorder(nil, nil, m.art, nil, metaBox)
-	transport := container.NewHBox(prevBtn, seekBackBtn, m.playBtn, seekFwdBtn, nextBtn)
+	transport := container.NewHBox(prevBtn, seekBackBtn, m.playBtn, seekFwdBtn, nextBtn, m.shuffleBtn)
 	bottom := container.NewVBox(m.progress, m.timeLbl, transport)
 	leftPane := container.NewBorder(top, bottom, nil, nil)
 	content := container.NewHSplit(leftPane, m.list)
@@ -220,6 +232,14 @@ func RunGUI(playlist []string, audio *audioPanel, metadata *FLACMetadata, playli
 			lenIdx := ap.streamer.Len()
 			sr := ap.sampleRate
 			speaker.Unlock()
+
+			// Auto-advance when the current track has drained.
+			if lenIdx > 0 && posIdx >= lenIdx && !m.loading {
+				if idx := nextTrackIndex(m.currentIdx, len(m.playlist), m.shuffle); idx >= 0 {
+					m.switchTrack(idx)
+				}
+				continue
+			}
 
 			frac := 0.0
 			if lenIdx > 0 {

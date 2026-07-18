@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math/rand/v2"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,12 +31,8 @@ func (ap *audioPanel) SetSpeed(ratio float64) {
 
 // constructor for audioPanel
 func NewAudioPanel(sampleRate beep.SampleRate, streamer beep.StreamSeekCloser) (*audioPanel, error) {
-	loopStreamer, err := beep.Loop2(streamer)
-	if err != nil {
-		return nil, err
-	}
-
-	ctrl := &beep.Ctrl{Streamer: loopStreamer}
+	// Play once (no loop) so the track drains and the UI can auto-advance.
+	ctrl := &beep.Ctrl{Streamer: streamer}
 
 	// 1. This handles user-directed speed adjustments (the Z and X hotkeys)
 	speedResampler := beep.ResampleRatio(4, 1.0, ctrl)
@@ -91,4 +88,24 @@ func loadTrackCmd(filePath string) tea.Cmd {
 			metadata: metadata,
 		}
 	}
+}
+
+// nextTrackIndex returns the index to play next: a random distinct track when
+// shuffle is on, otherwise cur+1. Returns -1 when there's nowhere to go
+// (single track, or end of a sequential playlist).
+func nextTrackIndex(cur, n int, shuffle bool) int {
+	if n <= 1 {
+		return -1
+	}
+	if shuffle {
+		for {
+			if i := rand.IntN(n); i != cur {
+				return i
+			}
+		}
+	}
+	if cur+1 < n {
+		return cur + 1
+	}
+	return -1
 }
