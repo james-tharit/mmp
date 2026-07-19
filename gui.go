@@ -139,6 +139,8 @@ func RunGUI(playlist []string, audio *audioPanel, metadata *FLACMetadata, playli
 		}
 	})
 
+	specBtn := widget.NewButton("Spectrum", func() { m.showSpectrum() })
+
 	// Volume buttons
 	volDownBtn := widget.NewButton("Vol-", func() {
 		speaker.Lock()
@@ -204,7 +206,7 @@ func RunGUI(playlist []string, audio *audioPanel, metadata *FLACMetadata, playli
 		container.NewHBox(widget.NewLabel("Speed:"), m.speedLbl, speedDownBtn, speedUpBtn),
 	)
 	top := container.NewBorder(nil, nil, m.art, nil, metaBox)
-	transport := container.NewHBox(prevBtn, seekBackBtn, m.playBtn, seekFwdBtn, nextBtn, m.shuffleBtn)
+	transport := container.NewHBox(prevBtn, seekBackBtn, m.playBtn, seekFwdBtn, nextBtn, m.shuffleBtn, specBtn)
 	bottom := container.NewVBox(m.progress, m.timeLbl, transport)
 	leftPane := container.NewBorder(top, bottom, nil, nil)
 	content := container.NewHSplit(leftPane, m.list)
@@ -287,6 +289,35 @@ func (m *guiUI) switchTrack(idx int) {
 			m.setSpeed(m.audio.resampler.Ratio())
 			m.list.Select(idx)
 			m.audio.Play()
+		})
+	}()
+}
+
+// showSpectrum analyzes the current track off the UI thread and opens the
+// spectrogram in its own window.
+func (m *guiUI) showSpectrum() {
+	if m.currentIdx < 0 || m.currentIdx >= len(m.playlist) {
+		return
+	}
+	path := m.playlist[m.currentIdx]
+	w := fyne.CurrentApp().NewWindow("Spectrum")
+	status := widget.NewLabel("Analyzing...")
+	img := &canvas.Image{FillMode: canvas.ImageFillStretch}
+	img.SetMinSize(fyne.NewSize(700, 380))
+	w.SetContent(container.NewBorder(nil, status, nil, nil, img))
+	w.Resize(fyne.NewSize(760, 460))
+	w.Show()
+
+	go func() {
+		res, err := analyzeSpectrum(path)
+		fyne.Do(func() {
+			if err != nil {
+				status.SetText(fmt.Sprintf("error: %v", err))
+				return
+			}
+			img.Image = res.Img
+			img.Refresh()
+			status.SetText(fmt.Sprintf("%s   |   vertical axis 0–%.1f kHz, cyan line = cutoff", res.Verdict, float64(res.MaxHz)/1000))
 		})
 	}()
 }
