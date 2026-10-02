@@ -1,4 +1,4 @@
-# Go-MMP: Cross-Platform TUI Music Player
+# Go-MMP: Cross-Platform GUI/TUI Music Player
 
 A high-performance, lightweight Terminal User Interface (TUI) music player written in Go. This player effortlessly handles high-fidelity formats like **FLAC** with real-time playback control, speed adjustment, and volume control, all driven by the pure-Go `beep` audio engine with a responsive BubbleTea terminal interface.
 
