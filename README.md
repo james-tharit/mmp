@@ -1,5 +1,6 @@
 # mmp
 
+![mmp](./cover.png)
 A terminal FLAC music player in Go. Built with [beep](https://github.com/gopxl/beep) (audio) and [Bubble Tea](https://github.com/charmbracelet/bubbletea) (UI).
 
 ## Install
