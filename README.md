@@ -1,16 +1,12 @@
 # mmp
 
-![mmp](./assets/cover.png)
+![search](./assets/search.gif)
 A terminal FLAC music player in Go. Built with [beep](https://github.com/gopxl/beep) (audio) and [Bubble Tea](https://github.com/charmbracelet/bubbletea) (UI).
 
 ## Support
 
 - **Files:** FLAC only (`.flac`). Other formats are ignored when scanning a directory.
 - **Platforms:** Linux (ALSA) and macOS (CoreAudio). Windows is untested.
-
-### Search
-press `/` then follow by keyword
-![search](./assets/search.gif)
 
 ## Install
 
