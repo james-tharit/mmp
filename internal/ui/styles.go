@@ -38,6 +38,8 @@ var (
 	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Width(14)
 	valueStyle = lipgloss.NewStyle().Foreground(yellow).Bold(true)
 
+	listTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#888888"))
+
 	barEmptyStyle = lipgloss.NewStyle().Foreground(gray)
 	barFullStyle  = lipgloss.NewStyle().Foreground(purple)
 

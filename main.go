@@ -10,6 +10,7 @@ import (
 	"github.com/gopxl/beep/v2"
 
 	"mmp/internal/flacmeta"
+	"mmp/internal/library"
 	"mmp/internal/player"
 	"mmp/internal/ui"
 )
@@ -40,19 +41,22 @@ func run(root string) error {
 		return err
 	}
 
+	albums := library.Build(files, meta)
+	first := albums[0].Tracks[0]
+
 	// The first track's rate becomes the hardware baseline for the whole session.
-	if err := player.InitSpeaker(beep.SampleRate(meta[0].SampleRate)); err != nil {
+	if err := player.InitSpeaker(beep.SampleRate(first.Meta.SampleRate)); err != nil {
 		return err
 	}
 	defer player.CloseSpeaker()
 
-	audio, err := player.Load(files[0])
+	audio, err := player.Load(first.Path)
 	if err != nil {
 		return err
 	}
 	audio.Play()
 
-	return ui.Run(files, audio, meta)
+	return ui.Run(albums, audio)
 }
 
 // findFlacs returns root itself if it is a FLAC file, else every .flac beneath it.

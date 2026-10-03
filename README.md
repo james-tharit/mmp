@@ -18,15 +18,19 @@ go build -o mmp
 ./mmp ~/Music        # play a directory (recurses for .flac)
 ```
 
+Tracks are grouped into albums by the `ALBUM` tag (parent directory name if untagged) and ordered by `TRACKNUMBER`.
+
 ## Keys
 
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
 | `←` / `→` | Seek -5s / +5s |
-| `n` / `↓` | Next track |
-| `p` / `↑` | Previous track |
-| `r` | Toggle shuffle |
+| `n` / `p` | Next / previous track (crosses albums) |
+| `↑` / `↓` | Move cursor in the list |
+| `Tab` | Switch list between albums and tracks |
+| `Enter` | Open album / play selected track |
+| `r` | Toggle shuffle (random track within the album) |
 | `a` / `s` | Volume down / up |
 | `z` / `x` | Speed down / up |
 | `q` / `Esc` / `Ctrl+C` | Quit |

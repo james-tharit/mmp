@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"mmp/internal/flacmeta"
+	"mmp/internal/library"
 	"mmp/internal/player"
 )
 
@@ -15,24 +16,33 @@ const (
 	speedFactor = 16.0 / 15
 )
 
+type level int
+
+const (
+	levelTracks level = iota
+	levelAlbums
+)
+
 type Model struct {
-	audio    *player.Panel
-	playlist []string
-	meta     []*flacmeta.Metadata
-	idx      int
-	width    int
-	loading  bool
-	shuffle  bool
-	err      error
-	art      string
+	audio  *player.Panel
+	albums []library.Album
+
+	album, track       int // playing
+	selAlbum, selTrack int // browse cursor
+	level              level
+
+	width   int
+	loading bool
+	shuffle bool
+	err     error
+	art     string
 }
 
 type tickMsg time.Time
 
-// Run blocks until the user quits. meta[i] describes playlist[i]; audio is the already-loaded first track.
-func Run(playlist []string, audio *player.Panel, meta []*flacmeta.Metadata) error {
-	m := Model{audio: audio, playlist: playlist, meta: meta}
-	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+// Run blocks until the user quits. audio is the already-loaded albums[0].Tracks[0].
+func Run(albums []library.Album, audio *player.Panel) error {
+	_, err := tea.NewProgram(Model{audio: audio, albums: albums}, tea.WithAltScreen()).Run()
 	return err
 }
 
@@ -40,23 +50,68 @@ func tick() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-func (m Model) current() *flacmeta.Metadata { return m.meta[m.idx] }
+func (m Model) tracks() []library.Track        { return m.albums[m.album].Tracks }
+func (m Model) current() *flacmeta.Metadata    { return m.tracks()[m.track].Meta }
+func (m Model) Init() tea.Cmd                  { return tick() }
+func (m Model) browsedTracks() []library.Track { return m.albums[m.selAlbum].Tracks }
 
-func (m Model) Init() tea.Cmd { return tick() }
+// following reports whether the cursor sits on the playing item and should move with playback.
+func (m Model) following() bool {
+	return m.selAlbum == m.album && (m.level == levelAlbums || m.selTrack == m.track)
+}
 
-func (m *Model) load(idx int) tea.Cmd {
-	m.idx, m.loading = idx, true
-	return loadTrack(m.playlist[idx])
+func (m *Model) load(a, t int) tea.Cmd {
+	if m.following() {
+		m.selAlbum, m.selTrack = a, t
+	}
+	m.album, m.track, m.loading = a, t, true
+	return loadTrack(m.albums[a].Tracks[t].Path)
 }
 
 func (m *Model) advance() tea.Cmd {
 	if m.loading {
 		return nil
 	}
-	if i := nextIndex(m.idx, len(m.playlist), m.shuffle); i >= 0 {
-		return m.load(i)
+	if a, t, ok := next(m.albums, m.album, m.track, m.shuffle); ok {
+		return m.load(a, t)
 	}
 	return nil
+}
+
+func (m *Model) back() tea.Cmd {
+	if m.loading {
+		return nil
+	}
+	if a, t, ok := prev(m.albums, m.album, m.track); ok {
+		return m.load(a, t)
+	}
+	return nil
+}
+
+func (m *Model) openAlbum() {
+	m.level, m.selTrack = levelTracks, 0
+	if m.selAlbum == m.album {
+		m.selTrack = m.track
+	}
+}
+
+func (m *Model) moveCursor(delta int) {
+	if m.level == levelAlbums {
+		m.selAlbum = max(0, min(m.selAlbum+delta, len(m.albums)-1))
+		return
+	}
+	m.selTrack = max(0, min(m.selTrack+delta, len(m.browsedTracks())-1))
+}
+
+func (m *Model) choose() tea.Cmd {
+	if m.level == levelAlbums {
+		m.openAlbum()
+		return nil
+	}
+	if m.loading {
+		return nil
+	}
+	return m.load(m.selAlbum, m.selTrack)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -95,12 +150,22 @@ func (m Model) handleKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "q", "esc", "ctrl+c":
 		return m, tea.Quit
-	case "n", "down":
+	case "n":
 		return m, m.advance()
-	case "p", "up":
-		if !m.loading && m.idx > 0 {
-			return m, m.load(m.idx - 1)
+	case "p":
+		return m, m.back()
+	case "up":
+		m.moveCursor(-1)
+	case "down":
+		m.moveCursor(1)
+	case "tab":
+		if m.level == levelAlbums {
+			m.openAlbum()
+		} else {
+			m.level = levelAlbums
 		}
+	case "enter":
+		return m, m.choose()
 	case "r":
 		m.shuffle = !m.shuffle
 	case " ":

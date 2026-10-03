@@ -11,7 +11,7 @@ import (
 
 const footerIcon = "🛰️"
 
-var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[R] Shuffle", "[Esc/Q] Quit"}
+var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[↑/↓] Browse", "[Tab] Albums", "[Enter] Select", "[R] Shuffle", "[Esc/Q] Quit"}
 
 func (m Model) View() string {
 	if m.err != nil {
@@ -33,7 +33,7 @@ func (m Model) View() string {
 	}
 	status := lipgloss.JoinHorizontal(lipgloss.Center, badge, "   ", shuffle)
 
-	title := titleStyle.Render(fmt.Sprintf(" Minimal Music Player [%d/%d] ", m.idx+1, len(m.playlist)))
+	title := titleStyle.Render(fmt.Sprintf(" Minimal Music Player [%d/%d] ", m.track+1, len(m.tracks())))
 	header := lipgloss.JoinHorizontal(lipgloss.Top, title, "   ", status)
 
 	art := m.art
@@ -103,22 +103,45 @@ func (m Model) renderInfo(position, length time.Duration, volume, speed float64)
 }
 
 func (m Model) renderList() string {
-	start := max(0, min(m.idx-listRows/2, len(m.meta)-listRows))
-	end := min(start+listRows, len(m.meta))
-
-	lines := make([]string, listRows)
-	for i := start; i < end; i++ {
-		md := m.meta[i]
-		line := lipgloss.NewStyle().Inline(true).MaxWidth(listWidth - 5).
-			Render(orDefault(md.Title, "Unknown") + " - " + orDefault(md.Artist, "Unknown"))
-		if i == m.idx {
-			line = playingStyle.Render("▶ " + line)
-		} else {
-			line = "  " + line
+	title, items, cursor := "Albums", make([]listItem, len(m.albums)), m.selAlbum
+	for i, a := range m.albums {
+		items[i] = listItem{fmt.Sprintf("%s (%d)", a.Name, len(a.Tracks)), i == m.album}
+	}
+	if m.level == levelTracks {
+		title, cursor = m.albums[m.selAlbum].Name, m.selTrack
+		items = items[:0]
+		for i, tr := range m.browsedTracks() {
+			items = append(items, listItem{
+				orDefault(tr.Meta.Title, "Unknown") + " - " + orDefault(tr.Meta.Artist, "Unknown"),
+				m.selAlbum == m.album && i == m.track,
+			})
 		}
-		lines[i-start] = line
+	}
+
+	start, end := window(cursor, len(items), listRows)
+	clip := lipgloss.NewStyle().Inline(true).MaxWidth(listWidth - 5)
+	lines := make([]string, listRows+1)
+	lines[0] = listTitleStyle.Render(clip.Render(title))
+	for i := start; i < end; i++ {
+		marker := "  "
+		if items[i].playing {
+			marker = "▶ "
+		}
+		line := marker + clip.Render(items[i].text)
+		switch {
+		case i == cursor:
+			line = valueStyle.Render(line)
+		case items[i].playing:
+			line = playingStyle.Render(line)
+		}
+		lines[i-start+1] = line
 	}
 	return m.panel(listWidth).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+type listItem struct {
+	text    string
+	playing bool
 }
 
 func progressBar(position, length time.Duration) string {

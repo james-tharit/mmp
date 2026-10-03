@@ -13,7 +13,7 @@ func TestParseVorbis(t *testing.T) {
 	var b bytes.Buffer
 	b.Write(le32(3))
 	b.WriteString("vnd")
-	comments := []string{"title=Song", "ARTIST=Band", "NOEQUALS", "Album=LP"}
+	comments := []string{"title=Song", "ARTIST=Band", "NOEQUALS", "Album=LP", "tracknumber=7/12"}
 	b.Write(le32(len(comments)))
 	for _, c := range comments {
 		b.Write(le32(len(c)))
@@ -22,12 +22,12 @@ func TestParseVorbis(t *testing.T) {
 
 	md := &Metadata{}
 	md.parseVorbis(b.Bytes())
-	if md.Title != "Song" || md.Artist != "Band" || md.Album != "LP" {
+	if md.Title != "Song" || md.Artist != "Band" || md.Album != "LP" || md.TrackNumber != 7 {
 		t.Fatalf("got %+v", md)
 	}
 
 	md = &Metadata{}
-	md.parseVorbis(b.Bytes()[:b.Len()-3]) // truncated: keep what parsed, no panic
+	md.parseVorbis(b.Bytes()[:b.Len()-3-len("tracknumber=7/12")-4]) // truncated: keep what parsed, no panic
 	if md.Title != "Song" || md.Artist != "Band" {
 		t.Fatalf("truncated: got %+v", md)
 	}

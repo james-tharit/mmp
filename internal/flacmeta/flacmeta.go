@@ -3,6 +3,7 @@ package flacmeta
 import (
 	"bytes"
 	"encoding/binary"
+	"strconv"
 	"strings"
 
 	"github.com/go-flac/go-flac/v2"
@@ -19,6 +20,7 @@ type Metadata struct {
 	Artist       string
 	Album        string
 	Date         string
+	TrackNumber  int
 	Duration     uint64
 	SampleRate   uint32
 	Channels     uint8
@@ -117,7 +119,14 @@ func (md *Metadata) parseVorbis(data []byte) {
 			return
 		}
 		key, value, ok := strings.Cut(string(comment), "=")
-		if dst := fields[strings.ToUpper(key)]; ok && dst != nil {
+		if !ok {
+			continue
+		}
+		key = strings.ToUpper(key)
+		if key == "TRACKNUMBER" { // "3" or "3/12"
+			n, _, _ := strings.Cut(value, "/")
+			md.TrackNumber, _ = strconv.Atoi(strings.TrimSpace(n))
+		} else if dst := fields[key]; dst != nil {
 			*dst = value
 		}
 	}
