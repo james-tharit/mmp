@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg" // FIX 1: Required to decode JPEG album art
 	_ "image/png"  // FIX 1: Required to decode PNG album art
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -138,11 +139,11 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.metadata = msg.metadata
 
 		// 4. Pre-render the album art cache safely
-		m.recalculateAlbumArt()
+		cmd := m.recalculateAlbumArt()
 
 		// 5. Fire off the new track playback
 		m.audio.Play()
-		return m, nil
+		return m, cmd
 
 	case tea.WindowSizeMsg:
 		m.terminalWidth = msg.Width
@@ -437,10 +438,12 @@ func (m *UIModel) renderProgressBar(position, length time.Duration) string {
 		barEmptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
 }
 
-func (m *UIModel) recalculateAlbumArt() {
+// recalculateAlbumArt rebuilds albumArtCache. On kitty-protocol terminals it
+// also returns the command that uploads the full-resolution image.
+func (m *UIModel) recalculateAlbumArt() tea.Cmd {
 	if m.metadata == nil || len(m.metadata.AlbumArt) == 0 {
 		m.albumArtCache = ""
-		return
+		return nil
 	}
 
 	targetWidth := 24
@@ -451,8 +454,19 @@ func (m *UIModel) recalculateAlbumArt() {
 		}
 	}
 
-	// 2. Render the high-quality ANSI block
+	if kittySupported() {
+		if ph, up := kittyArt(m.metadata.AlbumArt, targetWidth); ph != "" {
+			m.albumArtCache = ph
+			return func() tea.Msg {
+				os.Stdout.WriteString(up)
+				return nil
+			}
+		}
+	}
+
+	// 2. Fallback: half-block ANSI art
 	m.albumArtCache = renderAlbumArt(m.metadata.AlbumArt, targetWidth)
+	return nil
 }
 
 // renderAlbumArt converts raw image bytes into a high-quality 24-bit ANSI string
