@@ -35,7 +35,7 @@ var (
 	playingStyle = lipgloss.NewStyle().Bold(true).Foreground(green)
 	pausedStyle  = lipgloss.NewStyle().Bold(true).Foreground(gray)
 
-	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Width(12)
+	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Width(14)
 	valueStyle = lipgloss.NewStyle().Foreground(yellow).Bold(true)
 
 	barEmptyStyle = lipgloss.NewStyle().Foreground(gray)

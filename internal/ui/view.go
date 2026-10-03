@@ -11,7 +11,7 @@ import (
 
 const footerIcon = "🛰️"
 
-var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next"}
+var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[R] Shuffle", "[Esc/Q] Quit"}
 
 func (m Model) View() string {
 	if m.err != nil {
@@ -27,8 +27,14 @@ func (m Model) View() string {
 	case st.Paused:
 		badge = pausedStyle.Render("⏸ PAUSED")
 	}
-	title := fmt.Sprintf(" Minimal Music Player [%d/%d] ", m.idx+1, len(m.playlist))
-	header := lipgloss.JoinHorizontal(lipgloss.Center, titleStyle.Render(title), "   ", badge)
+	shuffle := pausedStyle.Render("🔀 SHUFFLE OFF")
+	if m.shuffle {
+		shuffle = playingStyle.Render("🔀 SHUFFLE ON")
+	}
+	status := lipgloss.JoinHorizontal(lipgloss.Center, badge, "   ", shuffle)
+
+	title := titleStyle.Render(fmt.Sprintf(" Minimal Music Player [%d/%d] ", m.idx+1, len(m.playlist)))
+	header := lipgloss.JoinHorizontal(lipgloss.Top, title, "   ", status)
 
 	art := m.art
 	if art == "" {
@@ -40,16 +46,12 @@ func (m Model) View() string {
 
 	main := lipgloss.JoinHorizontal(lipgloss.Top, artColumn, infoColumn, listColumn)
 	if m.narrow() {
-		main = lipgloss.JoinVertical(lipgloss.Left, artColumn, "", infoColumn, "", listColumn)
+		header = title
+		main = lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.NewStyle().MarginLeft(2).Render(status), artColumn, "", infoColumn, "", listColumn)
 	}
 
-	shuffle := "OFF"
-	if m.shuffle {
-		shuffle = "ON"
-	}
-	keys := append(footerKeys[:len(footerKeys):len(footerKeys)], "[R] Shuffle:"+shuffle, "[Esc/Q] Quit")
-
-	body := lipgloss.JoinVertical(lipgloss.Left, header, "", main, "", m.renderFooter(keys))
+	body := lipgloss.JoinVertical(lipgloss.Left, header, main, "", m.renderFooter(footerKeys))
 	return appStyle.Render(body) + "\n"
 }
 
