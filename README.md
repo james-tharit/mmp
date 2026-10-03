@@ -1,8 +1,12 @@
 # mmp
 
-![mmp](./cover.png)
+![mmp](./assets/cover.png)
 A terminal FLAC music player in Go. Built with [beep](https://github.com/gopxl/beep) (audio) and [Bubble Tea](https://github.com/charmbracelet/bubbletea) (UI).
 
+
+### Search
+press `/` then follow by keyword
+![search](./assets/search.gif)
 ## Install
 
 Needs Go, plus ALSA on Linux (`sudo apt install libasound2-dev`) or CoreAudio on macOS (built in).
@@ -24,7 +28,7 @@ Tracks are grouped into albums by the `ALBUM` tag (parent directory name if unta
 
 | Key | Action |
 |-----|--------|
-| `Space` | Play / pause |
+| `Space` | Play / pause (progress bar turns yellow while paused) |
 | `←` / `→` | Seek -5s / +5s |
 | `n` / `p` | Next / previous track (crosses albums) |
 | `↑` / `↓` | Move cursor in the list |
