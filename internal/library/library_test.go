@@ -28,3 +28,38 @@ func TestBuild(t *testing.T) {
 		t.Fatalf("track order = %v, want %v", got, want)
 	}
 }
+
+func TestSearch(t *testing.T) {
+	albums := []Album{
+		{Name: "Kind of Blue", Tracks: []Track{
+			{Path: "/m/so-what.flac", Meta: &flacmeta.Metadata{Title: "So What", Artist: "Miles Davis"}},
+			{Path: "/m/flamenco.flac", Meta: &flacmeta.Metadata{Title: "Flamenco Sketches", Artist: "Miles Davis"}},
+		}},
+		{Name: "OK Computer", Tracks: []Track{
+			{Path: "/m/x/01.flac", Meta: &flacmeta.Metadata{Title: "Airbag", Artist: "Radiohead"}},
+		}},
+	}
+	cases := []struct {
+		query string
+		want  []Ref
+	}{
+		{"", nil},
+		{"   ", nil},
+		{"MILES", []Ref{{0, 0}, {0, 1}}},
+		{"miles what", []Ref{{0, 0}}},
+		{"computer air", []Ref{{1, 0}}},
+		{"so-what", []Ref{{0, 0}}},
+		{"zzz", nil},
+	}
+	for _, c := range cases {
+		got := Search(albums, c.query)
+		if len(got) != len(c.want) {
+			t.Fatalf("Search(%q) = %v, want %v", c.query, got, c.want)
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Fatalf("Search(%q) = %v, want %v", c.query, got, c.want)
+			}
+		}
+	}
+}

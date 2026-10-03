@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 
+	"mmp/internal/flacmeta"
 	"mmp/internal/library"
 )
 
@@ -10,6 +11,9 @@ func albums(sizes ...int) []library.Album {
 	out := make([]library.Album, len(sizes))
 	for i, n := range sizes {
 		out[i].Tracks = make([]library.Track, n)
+		for j := range out[i].Tracks {
+			out[i].Tracks[j].Meta = &flacmeta.Metadata{}
+		}
 	}
 	return out
 }

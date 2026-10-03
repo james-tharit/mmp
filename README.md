@@ -30,6 +30,7 @@ Tracks are grouped into albums by the `ALBUM` tag (parent directory name if unta
 | `↑` / `↓` | Move cursor in the list |
 | `Tab` | Switch list between albums and tracks |
 | `Enter` | Open album / play selected track |
+| `/` | Search tracks (title, artist, album); `Enter` plays, `Esc` cancels |
 | `r` | Toggle shuffle (random track within the album) |
 | `a` / `s` | Volume down / up |
 | `z` / `x` | Speed down / up |

@@ -11,7 +11,9 @@ import (
 
 const footerIcon = "🛰️"
 
-var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[↑/↓] Browse", "[Tab] Albums", "[Enter] Select", "[R] Shuffle", "[Esc/Q] Quit"}
+var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[↑/↓] Browse", "[Tab] Albums", "[Enter] Select", "[/] Search", "[R] Shuffle", "[Esc/Q] Quit"}
+
+var searchKeys = []string{"[↑/↓] Select", "[Enter] Play", "[Esc] Cancel"}
 
 func (m Model) View() string {
 	if m.err != nil {
@@ -51,7 +53,7 @@ func (m Model) View() string {
 			lipgloss.NewStyle().MarginLeft(2).Render(status), artColumn, "", infoColumn, "", listColumn)
 	}
 
-	body := lipgloss.JoinVertical(lipgloss.Left, header, main, "", m.renderFooter(footerKeys))
+	body := lipgloss.JoinVertical(lipgloss.Left, header, main, "", m.renderFooter(m.footerKeys()))
 	return appStyle.Render(body) + "\n"
 }
 
@@ -102,26 +104,53 @@ func (m Model) renderInfo(position, length time.Duration, volume, speed float64)
 	))
 }
 
-func (m Model) renderList() string {
-	title, items, cursor := "Albums", make([]listItem, len(m.albums)), m.selAlbum
-	for i, a := range m.albums {
-		items[i] = listItem{fmt.Sprintf("%s (%d)", a.Name, len(a.Tracks)), i == m.album}
+func (m Model) footerKeys() []string {
+	if m.searching {
+		return searchKeys
 	}
-	if m.level == levelTracks {
-		title, cursor = m.albums[m.selAlbum].Name, m.selTrack
-		items = items[:0]
+	return footerKeys
+}
+
+func (m Model) listContents() (title string, items []listItem, cursor int) {
+	switch {
+	case m.searching:
+		for _, h := range m.hits {
+			a, tr := m.albums[h.Album], m.albums[h.Album].Tracks[h.Track]
+			items = append(items, listItem{
+				fmt.Sprintf("%s - %s · %s", orDefault(tr.Meta.Title, "Unknown"), orDefault(tr.Meta.Artist, "Unknown"), a.Name),
+				h.Album == m.album && h.Track == m.track,
+			})
+		}
+		return "/ " + m.query + "▌", items, m.selHit
+	case m.level == levelTracks:
 		for i, tr := range m.browsedTracks() {
 			items = append(items, listItem{
 				orDefault(tr.Meta.Title, "Unknown") + " - " + orDefault(tr.Meta.Artist, "Unknown"),
 				m.selAlbum == m.album && i == m.track,
 			})
 		}
+		return m.albums[m.selAlbum].Name, items, m.selTrack
 	}
+	for i, a := range m.albums {
+		items = append(items, listItem{fmt.Sprintf("%s (%d)", a.Name, len(a.Tracks)), i == m.album})
+	}
+	return "Albums", items, m.selAlbum
+}
+
+func (m Model) renderList() string {
+	title, items, cursor := m.listContents()
 
 	start, end := window(cursor, len(items), listRows)
 	clip := lipgloss.NewStyle().Inline(true).MaxWidth(listWidth - 5)
 	lines := make([]string, listRows+1)
 	lines[0] = listTitleStyle.Render(clip.Render(title))
+	if m.searching && len(items) == 0 {
+		hint := "no matches"
+		if m.query == "" {
+			hint = "type to search"
+		}
+		lines[1] = helpStyle.UnsetMarginTop().Render("  " + hint)
+	}
 	for i := start; i < end; i++ {
 		marker := "  "
 		if items[i].playing {

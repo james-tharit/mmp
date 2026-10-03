@@ -31,6 +31,11 @@ type Model struct {
 	selAlbum, selTrack int // browse cursor
 	level              level
 
+	searching bool
+	query     string
+	hits      []library.Ref
+	selHit    int
+
 	width   int
 	loading bool
 	shuffle bool
@@ -141,6 +146,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshArt()
 
 	case tea.KeyMsg:
+		if m.searching {
+			return m.handleSearchKey(msg)
+		}
 		return m.handleKey(msg.String())
 	}
 	return m, nil
@@ -166,6 +174,8 @@ func (m Model) handleKey(key string) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		return m, m.choose()
+	case "/":
+		m.searching, m.query, m.hits, m.selHit = true, "", nil, 0
 	case "r":
 		m.shuffle = !m.shuffle
 	case " ":
@@ -182,6 +192,48 @@ func (m Model) handleKey(key string) (tea.Model, tea.Cmd) {
 		m.audio.ScaleSpeed(speedFactor)
 	case "z":
 		m.audio.ScaleSpeed(1 / speedFactor)
+	}
+	return m, nil
+}
+
+func (m *Model) refilter() {
+	m.hits, m.selHit = library.Search(m.albums, m.query), 0
+}
+
+func (m *Model) playHit() tea.Cmd {
+	if m.loading || m.selHit >= len(m.hits) {
+		return nil
+	}
+	h := m.hits[m.selHit]
+	cmd := m.load(h.Album, h.Track)
+	m.searching = false
+	m.selAlbum, m.selTrack, m.level = h.Album, h.Track, levelTracks
+	return cmd
+}
+
+func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.searching = false
+	case tea.KeyEnter:
+		return m, m.playHit()
+	case tea.KeyUp:
+		m.selHit = max(0, m.selHit-1)
+	case tea.KeyDown:
+		m.selHit = max(0, min(m.selHit+1, len(m.hits)-1))
+	case tea.KeyBackspace:
+		if r := []rune(m.query); len(r) > 0 {
+			m.query = string(r[:len(r)-1])
+			m.refilter()
+		}
+	case tea.KeySpace:
+		m.query += " "
+		m.refilter()
+	case tea.KeyRunes:
+		m.query += string(msg.Runes)
+		m.refilter()
 	}
 	return m, nil
 }
