@@ -1,4 +1,4 @@
-package main
+package kitty
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ func TestKittyArt(t *testing.T) {
 			os.Remove(f)
 		}
 	})
-	ph, up := kittyArt(b.Bytes(), 24)
+	ph, up := Art(b.Bytes(), 24)
 	if lines := strings.Count(ph, "\n"); lines != 12 {
 		t.Errorf("rows = %d, want 12", lines)
 	}

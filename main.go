@@ -3,111 +3,66 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/gopxl/beep/v2"
-	"github.com/gopxl/beep/v2/flac"
-	"github.com/gopxl/beep/v2/speaker"
-)
 
-// hardware sample rate
-var speakerSR beep.SampleRate
+	"mmp/internal/flacmeta"
+	"mmp/internal/player"
+	"mmp/internal/ui"
+)
 
 func main() {
 	flag.Parse()
-
-	targetPath := flag.Arg(0)
-	if targetPath == "" {
-		fmt.Fprintf(os.Stderr, "Usage: %s <path_to_file_or_directory>\n", os.Args[0])
+	if flag.NArg() == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: %s <file_or_directory>\n", os.Args[0])
 		os.Exit(1)
 	}
-
-	// 1. Check if the path is a file or a directory
-	fileInfo, err := os.Stat(targetPath)
-	if err != nil {
-		report(fmt.Errorf("error accessing path: %w", err))
-	}
-
-	var flacFiles []string
-
-	if fileInfo.IsDir() {
-		// Scenario A: It's a directory, scan it and all sub-directories for FLAC files
-		err := filepath.WalkDir(targetPath, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !d.IsDir() && isFlac(d.Name()) {
-				flacFiles = append(flacFiles, path)
-			}
-			return nil
-		})
-		if err != nil {
-			report(fmt.Errorf("failed to read directory: %w", err))
-		}
-	} else {
-		// Scenario B: It's a single file, verify it's a FLAC
-		if isFlac(targetPath) {
-			flacFiles = append(flacFiles, targetPath)
-		} else {
-			fmt.Fprintln(os.Stderr, "Error: The provided file is not a FLAC file.")
-			os.Exit(1)
-		}
-	}
-
-	// 2. Ensure we have at least one file to play
-	if len(flacFiles) == 0 {
-		fmt.Fprintln(os.Stderr, "No FLAC files found to play.")
+	if err := run(flag.Arg(0)); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-
-	// 3. Setup and play the first track initially
-	firstTrack := flacFiles[0]
-
-	f, err := os.Open(firstTrack)
-	if err != nil {
-		report(err)
-	}
-	// Note: these stay open for the first track until main exits,
-	// which is perfectly fine since the UI handles closing later tracks.
-	defer f.Close()
-
-	streamer, format, err := flac.Decode(f)
-	if err != nil {
-		report(err)
-	}
-	defer streamer.Close()
-
-	// Save the baseline hardware sample rate globally
-	speakerSR = format.SampleRate
-	// Initialize speaker using the first track's sample rate as the hardware baseline
-	speaker.Init(speakerSR, speakerSR.N(time.Millisecond*100))
-	defer speaker.Close()
-
-	ap, err := NewAudioPanel(format.SampleRate, streamer)
-	if err != nil {
-		report(err)
-	}
-
-	ap.Play()
-
-	metadata, err := getMetadata(firstTrack)
-	if err != nil {
-		report(err)
-	}
-
-	// Get metadata for all songs in the playlist
-	playlistMetadata, err := getAllMetadata(flacFiles)
-	if err != nil {
-		report(err)
-	}
-
-	// 4. Launch the terminal UI
-	RunTUI(flacFiles, ap, metadata, playlistMetadata)
 }
 
-func report(err error) {
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
+func run(root string) error {
+	files, err := findFlacs(root)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no FLAC files found to play")
+	}
+
+	meta, err := flacmeta.ReadAll(files)
+	if err != nil {
+		return err
+	}
+
+	// The first track's rate becomes the hardware baseline for the whole session.
+	if err := player.InitSpeaker(beep.SampleRate(meta[0].SampleRate)); err != nil {
+		return err
+	}
+	defer player.CloseSpeaker()
+
+	audio, err := player.Load(files[0])
+	if err != nil {
+		return err
+	}
+	audio.Play()
+
+	return ui.Run(files, audio, meta)
+}
+
+// findFlacs returns root itself if it is a FLAC file, else every .flac beneath it.
+func findFlacs(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && flacmeta.IsFlac(path) {
+			files = append(files, path)
+		}
+		return err
+	})
+	return files, err
 }

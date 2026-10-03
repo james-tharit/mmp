@@ -1,4 +1,4 @@
-package main
+package kitty
 
 import (
 	"bytes"
@@ -12,9 +12,9 @@ import (
 	"golang.org/x/image/draw"
 )
 
-// kittySupported reports whether the terminal speaks the kitty graphics protocol
+// Supported reports whether the terminal speaks the kitty graphics protocol
 // with unicode placeholders (kitty, ghostty). tmux/screen swallow the APC and ssh has no shared filesystem.
-func kittySupported() bool {
+func Supported() bool {
 	if os.Getenv("TMUX") != "" || os.Getenv("STY") != "" || os.Getenv("SSH_CONNECTION") != "" {
 		return false
 	}
@@ -33,9 +33,9 @@ var kittyDiacritics = []rune{
 
 const kittyImageID = 0x9867C5 // doubles as the placeholder foreground color (24-bit id)
 
-// kittyArt decodes the cover, sizes it to `cols` cells wide, and returns the
+// Art decodes the cover, sizes it to `cols` cells wide, and returns the
 // placeholder text block plus the escape sequence that uploads the image.
-func kittyArt(artBytes []byte, cols int) (placeholders, upload string) {
+func Art(artBytes []byte, cols int) (placeholders, upload string) {
 	img, _, err := image.Decode(bytes.NewReader(artBytes))
 	if err != nil || cols <= 0 {
 		return "", ""

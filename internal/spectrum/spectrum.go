@@ -1,4 +1,4 @@
-package main
+package spectrum
 
 import (
 	"fmt"
@@ -85,16 +85,16 @@ func verdict(cutoffHz, sampleRate int) string {
 	return fmt.Sprintf("LOSSY (transcode?) — brickwall at %.1f kHz, %s", khz, guess)
 }
 
-type spectrumResult struct {
+type Result struct {
 	Img      *image.RGBA
 	CutoffHz int
 	Verdict  string
 	MaxHz    int
 }
 
-// analyzeSpectrum decodes windows spread across the file and renders a
+// Analyze decodes windows spread across the file and renders a
 // spectrogram plus a lossy/lossless guess.
-func analyzeSpectrum(path string) (*spectrumResult, error) {
+func Analyze(path string) (*Result, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func analyzeSpectrum(path string) (*spectrumResult, error) {
 			img.Set(c+1, row, color.RGBA{0, 255, 255, 255})
 		}
 	}
-	return &spectrumResult{Img: img, CutoffHz: cutoff, Verdict: verdict(cutoff, sr), MaxHz: sr / 2}, nil
+	return &Result{Img: img, CutoffHz: cutoff, Verdict: verdict(cutoff, sr), MaxHz: sr / 2}, nil
 }
 
 var heatStops = [][3]float64{{0, 0, 8}, {50, 10, 90}, {180, 35, 70}, {250, 190, 60}, {255, 255, 230}}

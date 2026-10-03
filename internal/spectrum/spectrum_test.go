@@ -1,7 +1,8 @@
-package main
+package spectrum
 
 import (
 	"math"
+	"math/cmplx"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func TestFFTFindsTone(t *testing.T) {
 	fft(x)
 	best, bestMag := 0, 0.0
 	for b := 0; b < fftSize/2; b++ {
-		if m := cmplxAbs(x[b]); m > bestMag {
+		if m := cmplx.Abs(x[b]); m > bestMag {
 			best, bestMag = b, m
 		}
 	}
@@ -22,8 +23,6 @@ func TestFFTFindsTone(t *testing.T) {
 		t.Fatalf("peak bin at %d Hz, want ~5000", got)
 	}
 }
-
-func cmplxAbs(c complex128) float64 { return math.Hypot(real(c), imag(c)) }
 
 func TestCutoffAndVerdict(t *testing.T) {
 	const sr = 44100

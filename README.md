@@ -31,6 +31,14 @@ go build -o mmp
 | `z` / `x` | Speed down / up |
 | `q` / `Esc` / `Ctrl+C` | Quit |
 
+## Album art
+
+Covers are read from the FLAC's embedded picture.
+
+- **kitty / ghostty:** drawn at full resolution via the kitty graphics protocol. Disabled inside tmux/screen and over SSH.
+- **Other terminals:** drawn as 24-bit ANSI half-blocks (`▀`), so a true-color terminal is needed.
+- **No embedded cover:** shows a `♪ no cover` placeholder.
+
 ## Tips
 
 Convert m4a to flac:

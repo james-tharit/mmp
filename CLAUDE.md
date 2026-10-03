@@ -6,21 +6,24 @@
 
 ```bash
 go build -o mmp        # build
-go test ./...          # test (audio_panel_test.go, loadtrack_test.go)
+go test ./...          # test
 ./mmp <file.flac>      # run on a file
 ./mmp <dir>            # run on a directory (recurses for .flac)
 ```
 
 Playback needs ALSA (Linux) / CoreAudio (macOS).
 
-## Layout (single `package main`, flat)
+## Layout
 
-- `main.go` — CLI parsing, path→FLAC-file resolution, speaker init, launches the TUI.
-- `audio.go` — `audioPanel`: beep streamer chain (loop → speed resampler → speaker resampler → volume). Also `loadTrackCmd` for async track loading.
-- `flac.go` — `FLACMetadata` + `getMetadata`: hand-rolled VorbisComment (block type 4) and PICTURE (block type 6) parsing via go-flac.
-- `ui.go` — `UIModel`, the BubbleTea TUI (keybindings, ANSI album art).
+`main.go` (CLI, path→FLAC resolution, speaker init) over `internal/` packages; tests sit beside the code they cover.
+
+- `internal/player` — `Panel`: beep chain (stream → speed resampler → speaker resampler → volume). All speaker locking lives here; `Load` opens a track.
+- `internal/flacmeta` — `Metadata` + `Read`: hand-rolled VorbisComment (block 4) and PICTURE (block 6) parsing via go-flac.
+- `internal/ui` — BubbleTea TUI: `model.go` (state/keys), `view.go` (layout), `art.go` (cover), `playlist.go` (async load, next-track), `styles.go`.
+- `internal/kitty` — kitty graphics protocol cover art.
+- `internal/spectrum` — FFT spectrogram + lossy/lossless guess. Not wired into the UI yet.
 
 ## Notes
 
-- Speaker is initialized once in `main.go` at the first track's sample rate (`speakerSR`); every track resamples to that baseline. Don't re-init the speaker per track.
+- Speaker is initialized once (`player.InitSpeaker`) at the first track's sample rate; every track resamples to that baseline. Don't re-init the speaker per track.
 - VorbisComment parsing keys are uppercased before matching (spec says field names are case-insensitive).
