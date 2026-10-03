@@ -40,8 +40,9 @@ var (
 
 	listTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#888888"))
 
-	barEmptyStyle = lipgloss.NewStyle().Foreground(gray)
-	barFullStyle  = lipgloss.NewStyle().Foreground(purple)
+	barEmptyStyle  = lipgloss.NewStyle().Foreground(gray)
+	barFullStyle   = lipgloss.NewStyle().Foreground(purple)
+	barPausedStyle = lipgloss.NewStyle().Foreground(yellow)
 
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#555555")).

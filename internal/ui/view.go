@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"mmp/internal/player"
 )
 
 const footerIcon = "🛰️"
@@ -43,7 +45,7 @@ func (m Model) View() string {
 		art = lipgloss.Place(artCols, artRows, lipgloss.Center, lipgloss.Center, helpStyle.Render("♪ no cover"))
 	}
 	artColumn := lipgloss.NewStyle().MarginLeft(2).Width(artCols).Height(artRows).MaxHeight(artRows).Render(art)
-	infoColumn := m.renderInfo(st.Position, st.Length, st.Volume, st.Speed)
+	infoColumn := m.renderInfo(st)
 	listColumn := m.renderList()
 
 	main := lipgloss.JoinHorizontal(lipgloss.Top, artColumn, infoColumn, listColumn)
@@ -83,13 +85,13 @@ func row(label, value string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(label), valueStyle.Render(value))
 }
 
-func (m Model) renderInfo(position, length time.Duration, volume, speed float64) string {
+func (m Model) renderInfo(st player.State) string {
 	md := m.current()
 	sampleRate := "NaN Hz"
 	if md.SampleRate > 0 {
 		sampleRate = fmt.Sprintf("%d Hz", md.SampleRate)
 	}
-	volumePercent := max(0, int((volume+5.0)/5.0*100))
+	volumePercent := max(0, int((st.Volume+5.0)/5.0*100))
 
 	return m.panel(infoWidth).Render(lipgloss.JoinVertical(lipgloss.Left,
 		row("Title:", orDefault(md.Title, "Unknown Title")),
@@ -97,10 +99,10 @@ func (m Model) renderInfo(position, length time.Duration, volume, speed float64)
 		row("Album:", orDefault(md.Album, "Unknown Album")),
 		row("Samples:", sampleRate),
 		row("Volume (A/S):", fmt.Sprintf("%d%%", volumePercent)),
-		row("Speed  (Z/X):", fmt.Sprintf("%.2fx", speed)),
+		row("Speed  (Z/X):", fmt.Sprintf("%.2fx", st.Speed)),
 		"",
-		progressBar(position, length),
-		helpStyle.Render(fmt.Sprintf(" %s / %s", position.Round(time.Second), length.Round(time.Second))),
+		progressBar(st.Position, st.Length, st.Paused),
+		helpStyle.Render(fmt.Sprintf(" %s / %s", st.Position.Round(time.Second), st.Length.Round(time.Second))),
 	))
 }
 
@@ -173,13 +175,17 @@ type listItem struct {
 	playing bool
 }
 
-func progressBar(position, length time.Duration) string {
+func progressBar(position, length time.Duration, paused bool) string {
 	filled := 0
 	if length > 0 {
 		filled = int(math.Round(float64(position) / float64(length) * barWidth))
 		filled = max(0, min(filled, barWidth))
 	}
-	return barFullStyle.Render(strings.Repeat("█", filled)) +
+	full := barFullStyle
+	if paused {
+		full = barPausedStyle
+	}
+	return full.Render(strings.Repeat("█", filled)) +
 		barEmptyStyle.Render(strings.Repeat("░", barWidth-filled))
 }
 
