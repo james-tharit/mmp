@@ -67,7 +67,7 @@ var (
 
 // RunTUI launches the Bubbletea terminal UI.
 func RunTUI(playlist []string, audio *audioPanel, metadata *FLACMetadata, playlistMetadata []*FLACMetadata) {
-	p := tea.NewProgram(NewUIModel(playlist, audio, metadata, playlistMetadata))
+	p := tea.NewProgram(NewUIModel(playlist, audio, metadata, playlistMetadata), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		report(err)
 	}
@@ -234,6 +234,34 @@ func (m UIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// Fixed art box so a missing/odd cover never changes the layout.
+const (
+	artCols  = 24
+	artRows  = 12
+	listRows = 10
+)
+
+// wideLayoutWidth is the min terminal width for the 3-column layout.
+const wideLayoutWidth = 130
+
+func (m UIModel) narrow() bool {
+	return m.terminalWidth > 0 && m.terminalWidth < wideLayoutWidth
+}
+
+// panel styles a column: left-bordered fixed width when wide, plain and
+// clamped to the terminal when stacked.
+func (m UIModel) panel(width int) lipgloss.Style {
+	if !m.narrow() {
+		return lipgloss.NewStyle().Width(width).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(gray).PaddingLeft(2).PaddingRight(1)
+	}
+	if w := m.terminalWidth - 8; w < width { // app border + padding
+		width = max(w, 20)
+	}
+	return lipgloss.NewStyle().Width(width).PaddingLeft(2)
+}
+
 // View renders the terminal UI
 func (m UIModel) View() string {
 	if m.err != nil {
@@ -275,25 +303,28 @@ func (m UIModel) View() string {
 	middleColumn := m.renderMetadataInformation(position, length, volume, speed)
 
 	// 5. Build Right Panel (Album Art) using the PRE-RENDERED Cache
-	leftColumn := ""
-	if m.albumArtCache != "" {
-		leftColumn = lipgloss.NewStyle().
-			MarginLeft(2).
-			Render(m.albumArtCache)
+	art := m.albumArtCache
+	if art == "" {
+		art = lipgloss.Place(artCols, artRows, lipgloss.Center, lipgloss.Center, helpStyle.Render("♪ no cover"))
 	}
+	leftColumn := lipgloss.NewStyle().MarginLeft(2).
+		Width(artCols).Height(artRows).MaxHeight(artRows).Render(art)
 
 	// 3. Build Middle Panel (Playlist)
 	rightColumn := m.renderSongList(43)
 
 	// 6. Combine Left, Middle, and Right Columns
 	mainLayout := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, middleColumn, rightColumn)
+	if m.narrow() {
+		mainLayout = lipgloss.JoinVertical(lipgloss.Left, leftColumn, "", middleColumn, "", rightColumn)
+	}
 
 	// 7. Footer & Assembly
 	shuffleState := "OFF"
 	if m.shuffle {
 		shuffleState = "ON"
 	}
-	footer := helpStyle.Render(fmt.Sprintf("🛰️ [Space] Pause • [←/→] Seek • [A/S] Vol • [Z/X] Speed • [N/P] Prev/Next • [R] Shuffle:%s • [Esc/Q] Quit", shuffleState))
+	footer := m.renderFooter([]string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[R] Shuffle:" + shuffleState, "[Esc/Q] Quit"})
 
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -352,12 +383,7 @@ func (m *UIModel) renderMetadataInformation(position, length time.Duration, volu
 		lipgloss.JoinHorizontal(lipgloss.Left, helpStyle.Render(timeFormat)),
 	)
 
-	return lipgloss.NewStyle().
-		Width(52).
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(gray).
-		PaddingLeft(2).
-		PaddingRight(1).Render(rawLeftColumn)
+	return m.panel(52).Render(rawLeftColumn)
 }
 
 func (m *UIModel) renderSongList(width int) string {
@@ -375,7 +401,8 @@ func (m *UIModel) renderSongList(width int) string {
 			}
 		}
 
-		songLine := fmt.Sprintf("%s - %s", songTitle, songArtist)
+		songLine := lipgloss.NewStyle().Inline(true).MaxWidth(width - 5). // border+padding+marker
+											Render(fmt.Sprintf("%s - %s", songTitle, songArtist))
 
 		// Highlight currently playing track
 		if i == m.currentIdx {
@@ -388,7 +415,7 @@ func (m *UIModel) renderSongList(width int) string {
 	}
 
 	// Create a scrollable playlist view (show max 10 songs at a time, centered on current)
-	maxSongsVisible := 10
+	maxSongsVisible := listRows
 	var playlistView []string
 
 	startIdx := m.currentIdx - (maxSongsVisible / 2)
@@ -404,15 +431,12 @@ func (m *UIModel) renderSongList(width int) string {
 		}
 	}
 
-	playlistView = songLines[startIdx:endIdx]
+	playlistView = append([]string{}, songLines[startIdx:endIdx]...)
+	for len(playlistView) < maxSongsVisible {
+		playlistView = append(playlistView, "")
+	}
 
-	return lipgloss.NewStyle().
-		Width(width).
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(gray).
-		PaddingLeft(2).
-		PaddingRight(1).
-		Render(lipgloss.JoinVertical(lipgloss.Left, playlistView...))
+	return m.panel(width).Render(lipgloss.JoinVertical(lipgloss.Left, playlistView...))
 }
 
 func (m *UIModel) renderProgressBar(position, length time.Duration) string {
@@ -527,4 +551,23 @@ func renderAlbumArt(artBytes []byte, width int) string {
 	}
 
 	return sb.String()
+}
+
+// renderFooter joins help items with " • ", wrapping between items to fit the terminal.
+func (m UIModel) renderFooter(items []string) string {
+	limit := m.terminalWidth - 8 // app border + padding
+	var lines []string
+	line := "🛰️"
+	for _, it := range items {
+		if sep := line + " • " + it; limit <= 0 || lipgloss.Width(sep) <= limit || line == "🛰️" {
+			if line == "🛰️" {
+				sep = line + " " + it
+			}
+			line = sep
+		} else {
+			lines = append(lines, line)
+			line = it
+		}
+	}
+	return helpStyle.Render(strings.Join(append(lines, line), "\n"))
 }
