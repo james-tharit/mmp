@@ -16,13 +16,11 @@ import (
 var speakerSR beep.SampleRate
 
 func main() {
-	tui := flag.Bool("tui", false, "run the terminal UI")
-	gui := flag.Bool("gui", false, "run the graphical UI (default)")
 	flag.Parse()
 
 	targetPath := flag.Arg(0)
 	if targetPath == "" {
-		fmt.Fprintf(os.Stderr, "Usage: %s [-tui|-gui] <path_to_file_or_directory>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s <path_to_file_or_directory>\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -105,12 +103,8 @@ func main() {
 		report(err)
 	}
 
-	// 4. Launch the chosen UI. GUI is the default; -tui opts into the terminal UI.
-	if *tui && !*gui {
-		RunTUI(flacFiles, ap, metadata, playlistMetadata)
-	} else {
-		RunGUI(flacFiles, ap, metadata, playlistMetadata)
-	}
+	// 4. Launch the terminal UI
+	RunTUI(flacFiles, ap, metadata, playlistMetadata)
 }
 
 func report(err error) {

@@ -64,7 +64,7 @@ var (
 			MarginTop(1)
 )
 
-// RunTUI launches the Bubbletea terminal UI (same args as RunGUI).
+// RunTUI launches the Bubbletea terminal UI.
 func RunTUI(playlist []string, audio *audioPanel, metadata *FLACMetadata, playlistMetadata []*FLACMetadata) {
 	p := tea.NewProgram(NewUIModel(playlist, audio, metadata, playlistMetadata))
 	if _, err := p.Run(); err != nil {

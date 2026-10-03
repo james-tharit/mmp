@@ -1,92 +1,43 @@
-# Go-MMP: Cross-Platform GUI/TUI Music Player
+# mmp
 
-A high-performance, lightweight Terminal User Interface (TUI) music player written in Go. This player effortlessly handles high-fidelity formats like **FLAC** with real-time playback control, speed adjustment, and volume control, all driven by the pure-Go `beep` audio engine with a responsive BubbleTea terminal interface.
+A terminal FLAC music player in Go. Built with [beep](https://github.com/gopxl/beep) (audio) and [Bubble Tea](https://github.com/charmbracelet/bubbletea) (UI).
 
-## Keybindings
+## Install
 
-    Space        — Toggle Play / Pause state seamlessly.
-    
-    W / Right    — Seek forward 1 second.
-    
-    Left Arrow   — Seek backward 1 second.
-    
-    A / S        — Volume down / up.
-    
-    Z / X        — Playback speed down / up.
-    
-    q / Ctrl+C   — Stop playback and safely exit the application interface.
-    
----
+Needs Go, plus ALSA on Linux (`sudo apt install libasound2-dev`) or CoreAudio on macOS (built in).
 
-## How It Works (The Architecture)
-
-This application uses a clean, pure-Go architecture with real-time audio control:
-
-1. **The Application Layer (Go & Bubble Tea):** Manages keybindings (Space to pause, arrow keys to seek, A/S for volume, Z/X for speed), orchestrates application state, and renders a responsive terminal interface with real-time playback information.
-
-2. **The Audio Engine (`beep`):** A pure-Go audio streaming library that handles:
-   - FLAC file decoding and streaming
-   - Sample rate resampling for speed control
-   - Volume mixing and effects processing
-   - Direct speaker output with minimal latency
-
-3. **The Speaker Module (`speaker`):** Initializes and manages the audio output pipeline, coordinating between the decoder, effects chain, and system audio hardware.
-
----
-
-## System Setup
-
-### Prerequisites
-- Go 1.21 or later
-- ALSA (Linux) or CoreAudio (macOS) already installed on your system
-
-### Linux Setup (Debian / Ubuntu / Kali)
-
-Install the necessary audio libraries, plus the OpenGL/X11/Wayland
-development headers the GUI (Fyne) needs to build:
 ```bash
-sudo apt update
-sudo apt install -y libasound2-dev \
-  libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev libxxf86vm-dev
-```
-The `libgl1-mesa-dev … libxxf86vm-dev` packages are only required for the GUI.
-The TUI (`-tui`) builds and runs without them.
-
-### macOS Setup
-
-No additional setup required—CoreAudio is built-in. Just ensure you have Xcode Command Line Tools:
-```bash
-xcode-select --install
-```
-## Building and Running the Application
-
-Clone the repository and build:
-```bash
-# Download and link project dependencies
-go mod tidy
-
-# Build the application
 go build -o mmp
-
-# Run with a FLAC file (GUI is the default)
-./mmp song.flac
-
-# Force the terminal UI instead
-./mmp -tui song.flac
 ```
 
-Or run directly:
+## Usage
+
 ```bash
-go run main.go song.flac
+./mmp song.flac      # play a file
+./mmp ~/Music        # play a directory (recurses for .flac)
 ```
 
+## Keys
 
-Change .m4a to .flac
-```sh
-ffmpeg -i <song>.m4a -c:a flac <output>.flac
+| Key | Action |
+|-----|--------|
+| `Space` | Play / pause |
+| `←` / `→` | Seek -5s / +5s |
+| `n` / `↓` | Next track |
+| `p` / `↑` | Previous track |
+| `r` | Toggle shuffle |
+| `a` / `s` | Volume down / up |
+| `z` / `x` | Speed down / up |
+| `q` / `Esc` / `Ctrl+C` | Quit |
+
+## Tips
+
+Convert m4a to flac:
+```bash
+ffmpeg -i song.m4a -c:a flac song.flac
 ```
 
-See Metadata of file
-```sh
-ffprobe -v error -show_entries format_tags:stream_tags -of default=noprint_wrappers=1 <target>.flac
+Show a file's tags:
+```bash
+ffprobe -v error -show_entries format_tags:stream_tags -of default=noprint_wrappers=1 song.flac
 ```
