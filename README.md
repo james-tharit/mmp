@@ -3,10 +3,15 @@
 ![mmp](./assets/cover.png)
 A terminal FLAC music player in Go. Built with [beep](https://github.com/gopxl/beep) (audio) and [Bubble Tea](https://github.com/charmbracelet/bubbletea) (UI).
 
+## Support
+
+- **Files:** FLAC only (`.flac`). Other formats are ignored when scanning a directory.
+- **Platforms:** Linux (ALSA) and macOS (CoreAudio). Windows is untested.
 
 ### Search
 press `/` then follow by keyword
 ![search](./assets/search.gif)
+
 ## Install
 
 Needs Go, plus ALSA on Linux (`sudo apt install libasound2-dev`) or CoreAudio on macOS (built in).
