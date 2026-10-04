@@ -55,7 +55,7 @@ func (m Model) View() string {
 			lipgloss.NewStyle().MarginLeft(2).Render(status), artColumn, "", infoColumn, "", listColumn)
 	}
 
-	body := lipgloss.JoinVertical(lipgloss.Left, header, main, "", m.renderFooter(m.footerKeys()))
+	body := lipgloss.JoinVertical(lipgloss.Left, header, main, "", m.renderFooter(m.footerKeys(), lipgloss.Width(main)))
 	return appStyle.Render(body) + "\n"
 }
 
@@ -189,9 +189,11 @@ func progressBar(position, length time.Duration, paused bool) string {
 		barEmptyStyle.Render(strings.Repeat("░", barWidth-filled))
 }
 
-// renderFooter joins help items with " • ", wrapping between items to fit the terminal.
-func (m Model) renderFooter(items []string) string {
-	limit := m.width - frameInset
+func (m Model) renderFooter(items []string, contentWidth int) string {
+	limit := contentWidth
+	if m.width > 0 {
+		limit = min(limit, m.width-frameInset)
+	}
 	var lines []string
 	line := footerIcon
 	for _, it := range items {
