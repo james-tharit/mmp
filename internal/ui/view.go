@@ -61,17 +61,37 @@ func (m Model) View() string {
 
 func (m Model) narrow() bool { return m.width > 0 && m.width < wideLayoutMin }
 
-// panel styles a column: left-bordered when wide, plain and clamped to the terminal when stacked.
+// panel styles a column: left-bordered when wide, plain and stretched to the terminal when stacked.
 func (m Model) panel(width int) lipgloss.Style {
 	if !m.narrow() {
 		return lipgloss.NewStyle().Width(width).
 			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(gray).PaddingLeft(2).PaddingRight(1)
 	}
-	if w := m.width - frameInset; w < width {
-		width = max(w, 20)
+	return lipgloss.NewStyle().Width(m.panelWidth(width)).PaddingLeft(2)
+}
+
+// panelWidth returns the width a panel should actually render at: the fixed
+// column width when wide, the full terminal width (floored at 20) when stacked.
+func (m Model) panelWidth(width int) int {
+	if m.narrow() {
+		if w := m.width - frameInset; w > 0 {
+			return max(w, 20)
+		}
 	}
-	return lipgloss.NewStyle().Width(width).PaddingLeft(2)
+	return width
+}
+
+// listColumnWidth is the list panel's Width in wide mode: fills whatever's
+// left after the art and info columns so the three-column row spans the terminal.
+func (m Model) listColumnWidth() int {
+	if m.narrow() {
+		return m.panelWidth(listWidth)
+	}
+	// outer widths: art=artCols+2 (margin), info=infoWidth+4 (border+padding),
+	// list panel adds border+padding=4 around its Width.
+	w := m.width - frameInset - (artCols + 2) - (infoWidth + 4) - 4
+	return max(w, listWidth)
 }
 
 func orDefault(s, fallback string) string {
@@ -143,7 +163,8 @@ func (m Model) renderList() string {
 	title, items, cursor := m.listContents()
 
 	start, end := window(cursor, len(items), listRows)
-	clip := lipgloss.NewStyle().Inline(true).MaxWidth(listWidth - 5)
+	width := m.listColumnWidth()
+	clip := lipgloss.NewStyle().Inline(true).MaxWidth(width - 5)
 	lines := make([]string, listRows+1)
 	lines[0] = listTitleStyle.Render(clip.Render(title))
 	if m.searching && len(items) == 0 {
@@ -167,7 +188,7 @@ func (m Model) renderList() string {
 		}
 		lines[i-start+1] = line
 	}
-	return m.panel(listWidth).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return m.panel(width).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 type listItem struct {
