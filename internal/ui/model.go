@@ -47,7 +47,7 @@ type tickMsg time.Time
 
 // Run blocks until the user quits. audio is the already-loaded albums[0].Tracks[0].
 func Run(albums []library.Album, audio *player.Panel) error {
-	_, err := tea.NewProgram(Model{audio: audio, albums: albums}, tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(Model{audio: audio, albums: albums}, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	return err
 }
 
@@ -150,6 +150,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSearchKey(msg)
 		}
 		return m.handleKey(msg.String())
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+	}
+
+	return m, nil
+}
+
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// Ignore release and motion so left/right click don't fire twice.
+	// Wheel events only arrive as Press, so this doesn't drop them.
+	if msg.Action != tea.MouseActionPress {
+		return m, nil
+	}
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		m.moveCursor(-1)
+	case tea.MouseButtonWheelDown:
+		m.moveCursor(1)
+	case tea.MouseButtonLeft:
+		return m, m.choose()
+	case tea.MouseButtonRight:
+		m.audio.TogglePause()
 	}
 	return m, nil
 }
