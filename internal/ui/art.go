@@ -20,7 +20,7 @@ import (
 // returns the command that uploads the full-resolution image.
 func (m *Model) refreshArt() tea.Cmd {
 	m.art = ""
-	art := m.current().AlbumArt
+	art := m.albums[m.selAlbum].Tracks[0].Meta.AlbumArt
 	if len(art) == 0 {
 		return nil
 	}

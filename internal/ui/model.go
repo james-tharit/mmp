@@ -100,12 +100,17 @@ func (m *Model) openAlbum() {
 	}
 }
 
-func (m *Model) moveCursor(delta int) {
+func (m *Model) moveCursor(delta int) tea.Cmd {
 	if m.level == levelAlbums {
+		prev := m.selAlbum
 		m.selAlbum = max(0, min(m.selAlbum+delta, len(m.albums)-1))
-		return
+		if m.selAlbum != prev {
+			return m.refreshArt()
+		}
+		return nil
 	}
 	m.selTrack = max(0, min(m.selTrack+delta, len(m.browsedTracks())-1))
+	return nil
 }
 
 func (m *Model) choose() tea.Cmd {
@@ -166,9 +171,9 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
-		m.moveCursor(-1)
+		return m, m.moveCursor(-1)
 	case tea.MouseButtonWheelDown:
-		m.moveCursor(1)
+		return m, m.moveCursor(1)
 	case tea.MouseButtonLeft:
 		return m, m.choose()
 	case tea.MouseButtonRight:
@@ -186,9 +191,9 @@ func (m Model) handleKey(key string) (tea.Model, tea.Cmd) {
 	case "p":
 		return m, m.back()
 	case "up":
-		m.moveCursor(-1)
+		return m, m.moveCursor(-1)
 	case "down":
-		m.moveCursor(1)
+		return m, m.moveCursor(1)
 	case "tab":
 		if m.level == levelAlbums {
 			m.openAlbum()
