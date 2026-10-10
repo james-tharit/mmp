@@ -48,6 +48,19 @@ func Build(paths []string, meta []*flacmeta.Metadata) []Album {
 // Ref locates a track in an []Album.
 type Ref struct{ Album, Track int }
 
+// Find returns the (album, track) indices of the track with this path. ok is
+// false when no track matches, in which case the indices are both zero.
+func Find(albums []Album, path string) (a, t int, ok bool) {
+	for ai, al := range albums {
+		for ti, tr := range al.Tracks {
+			if tr.Path == path {
+				return ai, ti, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
 // Search returns every track whose title, artist, album or filename contains
 // all whitespace-separated terms of query (case-insensitive). An empty query matches nothing.
 func Search(albums []Album, query string) []Ref {

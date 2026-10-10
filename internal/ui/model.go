@@ -8,6 +8,7 @@ import (
 	"mmp/internal/flacmeta"
 	"mmp/internal/library"
 	"mmp/internal/player"
+	"mmp/internal/state"
 )
 
 const (
@@ -38,17 +39,40 @@ type Model struct {
 
 	width   int
 	loading bool
-	shuffle bool
+	shuffle shuffleMode
+	repeat  repeat
 	err     error
 	art     string
 }
 
 type tickMsg time.Time
 
-// Run blocks until the user quits. audio is the already-loaded albums[0].Tracks[0].
-func Run(albums []library.Album, audio *player.Panel) error {
-	_, err := tea.NewProgram(Model{audio: audio, albums: albums}, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
-	return err
+// Run blocks until the user quits. audio must already play the track whose
+// path is in saved.TrackPath (or albums[0].Tracks[0] if that path is not in
+// the library). On exit it returns the final state for persistence.
+func Run(albums []library.Album, audio *player.Panel, saved state.State) (state.State, error) {
+	m := Model{
+		audio:   audio,
+		albums:  albums,
+		shuffle: shuffleMode(saved.Shuffle) % 3,
+		repeat:  repeat(saved.Repeat) % 4,
+	}
+	if a, t, ok := library.Find(albums, saved.TrackPath); ok {
+		m.album, m.track, m.selAlbum, m.selTrack = a, t, a, t
+	}
+	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	if err != nil {
+		return state.State{}, err
+	}
+	fm := final.(Model)
+	audioState := fm.audio.State()
+	return state.State{
+		TrackPath: fm.albums[fm.album].Tracks[fm.track].Path,
+		Position:  audioState.Position,
+		Volume:    audioState.Volume,
+		Shuffle:   int(fm.shuffle),
+		Repeat:    int(fm.repeat),
+	}, nil
 }
 
 func tick() tea.Cmd {
@@ -77,7 +101,7 @@ func (m *Model) advance() tea.Cmd {
 	if m.loading {
 		return nil
 	}
-	if a, t, ok := next(m.albums, m.album, m.track, m.shuffle); ok {
+	if a, t, ok := next(m.albums, m.album, m.track, m.shuffle, m.repeat); ok {
 		return m.load(a, t)
 	}
 	return nil
@@ -205,7 +229,9 @@ func (m Model) handleKey(key string) (tea.Model, tea.Cmd) {
 	case "/":
 		m.searching, m.query, m.hits, m.selHit = true, "", nil, 0
 	case "r":
-		m.shuffle = !m.shuffle
+		m.shuffle = (m.shuffle + 1) % 3
+	case "l":
+		m.repeat = (m.repeat + 1) % 4
 	case " ":
 		m.audio.TogglePause()
 	case "right":

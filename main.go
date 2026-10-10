@@ -12,6 +12,7 @@ import (
 	"mmp/internal/flacmeta"
 	"mmp/internal/library"
 	"mmp/internal/player"
+	"mmp/internal/state"
 	"mmp/internal/ui"
 )
 
@@ -42,7 +43,9 @@ func run(root string) error {
 	}
 
 	albums := library.Build(files, meta)
-	first := albums[0].Tracks[0]
+	saved := state.Load()
+	a0, t0, resumed := library.Find(albums, saved.TrackPath)
+	first := albums[a0].Tracks[t0]
 
 	// The first track's rate becomes the hardware baseline for the whole session.
 	if err := player.InitSpeaker(beep.SampleRate(first.Meta.SampleRate)); err != nil {
@@ -54,9 +57,20 @@ func run(root string) error {
 	if err != nil {
 		return err
 	}
+	if saved.Volume < 0 {
+		audio.AdjustVolume(saved.Volume)
+	}
+	if resumed && saved.Position > 0 {
+		audio.SeekBy(saved.Position)
+	}
 	audio.Play()
 
-	return ui.Run(albums, audio)
+	final, err := ui.Run(albums, audio, saved)
+	if err != nil {
+		return err
+	}
+	_ = state.Save(final)
+	return nil
 }
 
 // findFlacs returns root itself if it is a FLAC file, else every .flac beneath it.

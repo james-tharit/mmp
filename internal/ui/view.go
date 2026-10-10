@@ -13,7 +13,7 @@ import (
 
 const footerIcon = "🛰️"
 
-var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[↑/↓] Browse", "[Tab] Albums", "[Enter] Select", "[/] Search", "[R] Shuffle", "[Esc/Q] Quit"}
+var footerKeys = []string{"[Space] Pause", "[←/→] Seek", "[A/S] Vol", "[Z/X] Speed", "[N/P] Prev/Next", "[↑/↓] Browse", "[Tab] Albums", "[Enter] Select", "[/] Search", "[R] Shuffle", "[L] Repeat", "[Esc/Q] Quit"}
 
 var searchKeys = []string{"[↑/↓] Select", "[Enter] Play", "[Esc] Cancel"}
 
@@ -31,11 +31,15 @@ func (m Model) View() string {
 	case st.Paused:
 		badge = pausedStyle.Render("⏸ PAUSED")
 	}
-	shuffle := pausedStyle.Render("🔀 SHUFFLE OFF")
-	if m.shuffle {
-		shuffle = playingStyle.Render("🔀 SHUFFLE ON")
+	shuffle := pausedStyle.Render(m.shuffle.label())
+	if m.shuffle != shuffleOff {
+		shuffle = playingStyle.Render(m.shuffle.label())
 	}
-	status := lipgloss.JoinHorizontal(lipgloss.Center, badge, "   ", shuffle)
+	rep := pausedStyle.Render(m.repeat.label())
+	if m.repeat != repeatOff {
+		rep = playingStyle.Render(m.repeat.label())
+	}
+	status := lipgloss.JoinHorizontal(lipgloss.Center, badge, "   ", shuffle, "   ", rep)
 
 	title := titleStyle.Render(fmt.Sprintf(" Minimal Music Player [%d/%d] ", m.track+1, len(m.tracks())))
 	header := lipgloss.JoinHorizontal(lipgloss.Top, title, "   ", status)

@@ -29,6 +29,19 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestFind(t *testing.T) {
+	albums := []Album{
+		{Tracks: []Track{{Path: "/a/1.flac"}, {Path: "/a/2.flac"}}},
+		{Tracks: []Track{{Path: "/b/1.flac"}}},
+	}
+	if a, tr, ok := Find(albums, "/b/1.flac"); !ok || a != 1 || tr != 0 {
+		t.Fatalf("Find hit = %d,%d,%v", a, tr, ok)
+	}
+	if a, tr, ok := Find(albums, "/missing.flac"); ok || a != 0 || tr != 0 {
+		t.Fatalf("Find miss = %d,%d,%v", a, tr, ok)
+	}
+}
+
 func TestSearch(t *testing.T) {
 	albums := []Album{
 		{Name: "Kind of Blue", Tracks: []Track{
